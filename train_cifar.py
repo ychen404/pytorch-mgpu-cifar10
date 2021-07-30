@@ -17,65 +17,94 @@ import argparse
 
 from models import *
 from utils import progress_bar
-
+import datetime
+from dataloader import *
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
+parser.add_argument('--epoch', default=200, type=int, help='Number of epochs')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
-parser.add_argument('--net', default='res18')
+parser.add_argument('--net', default='res8')
+parser.add_argument('--dataset', default='cifar10')
 parser.add_argument('--bs', default='128')
+parser.add_argument('--workspace', default='')
+parser.add_argument("--split", default=0.5, type=float, help="split training data")
+
+
 args = parser.parse_args()
 
 bs = int(args.bs)
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = 'cuda:3' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 # Data
 print('==> Preparing data..')
-transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
 
-transform_test = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
+num_classes = 10 if args.dataset == 'cifar10' else 100
 
-trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=bs, shuffle=True, num_workers=8)
+if args.dataset == 'cifar10':
+    print('==> CIFAR-10')
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
 
-testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
-testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=8)
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
 
-classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+    trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=bs, shuffle=True, num_workers=4)
+
+    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False, num_workers=4)
+
+    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+
+else:
+    print('==> CIFAR-100')
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.507, 0.487, 0.441), (0.267, 0.256, 0.276)),
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.507, 0.487, 0.441), (0.267, 0.256, 0.276)),
+    ])
+
+    trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
+    
+    public, private = split_train_data(train_dataset, args.public_split)
+
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=bs, shuffle=True, num_workers=4)
+
+    testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False, num_workers=4)
 
 # Model
 print('==> Building model..')
-# net = VGG('VGG19')
-if args.net=='res18':
-    net = ResNet18()
+
+if args.net=='res8':
+    net = resnet8(num_classes=num_classes)    
+if args.net=='lenet':
+    net = LeNet()
 elif args.net=='vgg':
     net = VGG('VGG19')
-elif args.net=='res34':
-    net = ResNet34()
-elif args.net=='res50':
-    net = ResNet50()
-elif args.net=='res101':
-    net = ResNet101()
-# net = PreActResNet18()
-# net = GoogLeNet()
-# net = DenseNet121()
-# net = ResNeXt29_2x64d()
-# net = MobileNet()
-# net = MobileNetV2()
-# net = DPN92()
-# net = ShuffleNetG2()
-# net = SENet18()
+
+
+total_params = sum(p.numel() for p in net.parameters())
+layers = len(list(net.modules()))
+print(f" total parameters: {total_params}, layers {layers}")
+
+
 net = net.to(device)
 if device == 'cuda':
     net = torch.nn.DataParallel(net) # make parallel
@@ -92,6 +121,7 @@ if args.resume:
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+# optimizer = optim.Adam(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
 # Training
 def train(epoch):
@@ -150,13 +180,22 @@ def test(epoch):
             os.mkdir('checkpoint')
         torch.save(state, './checkpoint/'+args.net+'-ckpt.t7')
         best_acc = acc
+    return acc
+
+def write_csv(path, content):
+    with open(path, 'a+') as f:
+        f.write(content + '\n')
 
 list_loss = []
+accuracy = 0
+strtime = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")
 
-for epoch in range(start_epoch, start_epoch+50):
+for epoch in range(start_epoch, start_epoch + args.epoch):
     trainloss = train(epoch)
-    test(epoch)
-    
+    acc = test(epoch)
+    print(f"The result is: {acc}")
+    write_csv('acc_' + args.workspace + strtime + '.csv', str(acc))
     list_loss.append(trainloss)
-    print(list_loss)
-print(list_loss)
+    # print(list_loss)
+# print(list_loss)
+print("===> BEST ACC. PERFORMANCE: %.2f%%" % (acc))
