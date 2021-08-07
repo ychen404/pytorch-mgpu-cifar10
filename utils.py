@@ -9,9 +9,17 @@ import os
 import sys
 import time
 import math
-
 import torch.nn as nn
 import torch.nn.init as init
+import torch
+import logging
+import datetime
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel('DEBUG')
+fmt_str = '%(name)s - %(levelname)s - %(message)s'
+fmt_file = '%(asctime)s - %(name)s [%(levelname)s]: %(message)s'
 
 
 def get_mean_and_std(dataset):
@@ -127,3 +135,39 @@ def format_time(seconds):
     if f == '':
         f = '0ms'
     return f
+
+
+def load_checkpoint(net):
+
+    print('==> Resuming from checkpoint..')
+    assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
+    checkpoint = torch.load('./checkpoint/ckpt.t7')
+    net.load_state_dict(checkpoint['net'])
+    best_acc = checkpoint['acc']
+    start_epoch = checkpoint['epoch']
+
+    return net
+
+def print_total_params(net):
+    total_params = sum(p.numel() for p in net.parameters())
+    layers = len(list(net.modules()))
+    logger.debug(f" total parameters: {total_params}, layers {layers}")
+
+def write_csv(path, content):
+    with open(path, 'a+') as f:
+        f.write(content + '\n')
+
+def print_param(model):
+    for name, param in model.named_parameters():
+        # if param.requires_grad:
+        logger.debug (f"{name}, \t\trequires_grad={param.requires_grad}")
+
+def weight_reset(m):
+    if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+        m.reset_parameters()
+
+def get_time():
+    
+    strtime = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")
+    
+    return strtime
