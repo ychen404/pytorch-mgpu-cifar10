@@ -88,21 +88,21 @@ def plot(y_axis, xlabel=None, ylabel=None, title=None, output='result.png'):
 if __name__ == "__main__":
     args = parse_arguments()
 
-    # lambda=1
-    # edge_data = 'acc_cifar100_ten_classes_lambda_1_2021-08-06-04-39.csv'
-    # cloud_data = 'distill_acc_cifar100_ten_classes_lambda_1_2021-08-06-04-39.csv'
-    # edge_data = 'acc_worker1cifar100_ten_classes_lambda_1_2021-08-06-04-39.csv'
-    # cloud_data = 'distill_acc_worker1_cifar100_ten_classes_lambda_1_2021-08-06-04-39.csv'
 
-    # lambda=0.5
-    # edge_data = 'acc_cifar100_ten_classes_lambda_0.5_2021-08-06-04-38.csv'
-    # cloud_data = 'distill_acc_cifar100_ten_classes_lambda_0.5_2021-08-06-04-38.csv'
-    edge_data = 'acc_worker1cifar100_ten_classes_lambda_0.5_2021-08-06-04-38.csv'
-    cloud_data = 'distill_acc_worker1_cifar100_ten_classes_lambda_0.5_2021-08-06-04-38.csv'
+    # edge_data = 'acc_cifar100_ten_classes_lambda_1_worker_0_2021-08-08-01-28.csv'
+    # cloud_data = 'distill_acc_cifar100_ten_classes_lambda_1_worker_0_2021-08-08-01-32.csv'
+
+    # edge_data = 'acc_cifar100_ten_classes_lambda_1_worker_1_2021-08-08-01-43.csv'
+    # cloud_data = 'distill_acc_cifar100_ten_classes_lambda_1_worker_1_2021-08-08-01-47.csv'
+
+
+    edge_data = 'baselines_edge_20_classes/acc_cifar100_baseline_20_classes_res8_worker_0_2021-08-09-19-09.csv'
+    cloud_data = 'baselines_edge_20_classes/acc_cifar100_baseline_20_classes_res50_worker_0_2021-08-09-19-12.csv'
+
 
     data_to_plot = {}
 
-    data_to_plot['Edge_1'] = collect_data(edge_data)
+    data_to_plot['Edge'] = collect_data(edge_data)
     data_to_plot['Cloud'] = collect_data(cloud_data)
 
-    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Distillation with private data (ten classes)', output='lambda_0.5_w1.png')
+    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Distillation with private data (ten classes)', output='baseline_20_classes.png')

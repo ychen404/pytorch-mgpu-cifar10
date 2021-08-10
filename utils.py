@@ -21,7 +21,6 @@ logger.setLevel('DEBUG')
 fmt_str = '%(name)s - %(levelname)s - %(message)s'
 fmt_file = '%(asctime)s - %(name)s [%(levelname)s]: %(message)s'
 
-
 def get_mean_and_std(dataset):
     '''Compute the mean and std value of dataset.'''
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=2)
@@ -151,7 +150,7 @@ def load_checkpoint(net):
 def print_total_params(net):
     total_params = sum(p.numel() for p in net.parameters())
     layers = len(list(net.modules()))
-    logger.debug(f" total parameters: {total_params}, layers {layers}")
+    print(f" total parameters: {total_params}, layers {layers}")
 
 def write_csv(path, content):
     with open(path, 'a+') as f:
@@ -160,7 +159,7 @@ def write_csv(path, content):
 def print_param(model):
     for name, param in model.named_parameters():
         # if param.requires_grad:
-        logger.debug (f"{name}, \t\trequires_grad={param.requires_grad}")
+        print (f"{name}, \t\trequires_grad={param.requires_grad}")
 
 def weight_reset(m):
     if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
