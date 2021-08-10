@@ -244,7 +244,6 @@ def distill(epoch, edge_net, cloud_net, optimizer, trainloader, device, lambda_=
 
     return train_loss/(batch_idx+1)
 
-
 def distill_from_two_workers(epoch, edge_net_0, edge_net_1, cloud_net, optimizer, trainloader_0, trainloader_1, device, lambda_=1):
     
     logger.debug('\nEpoch: %d' % epoch)
@@ -269,9 +268,11 @@ def distill_from_two_workers(epoch, edge_net_0, edge_net_1, cloud_net, optimizer
 
             # Use the knowledge from the correct edge model
             # Only check the first sample is enough        
-            if 0 <= targets[0] <= 9:
+            if 0 <= targets[0].item() <= 9:
+                logger.debug("Worker 0 data")
                 out_t = edge_net_0(inputs)
-            elif 10 <= targets[0] <= 19:
+            elif 10 <= targets[0].item() <= 19:
+                logger.debug("Worker 1 data")
                 out_t = edge_net_1(inputs)
 
             batch_size = out_s.shape[0]
@@ -392,7 +393,7 @@ if __name__ == "__main__":
     net_1 = build_model_from_name('res8', num_classes)
 
     cloud_net = build_model_from_name('res50', num_classes)
-    cnet = build_model_from_name('res50', num_classes)
+    # cnet = build_model_from_name('res50', num_classes)
 
     if args.resume:
         load_checkpoint()
