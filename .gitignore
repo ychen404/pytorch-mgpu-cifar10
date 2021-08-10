@@ -94,6 +94,7 @@ venv.bak/
 pngs/
 single_model_training_results/
 two_worker_results/
+*.csv
 
 # Spyder project settings
 .spyderproject
