@@ -152,8 +152,9 @@ def print_total_params(net):
     layers = len(list(net.modules()))
     print(f" total parameters: {total_params}, layers {layers}")
 
-def write_csv(path, content):
-    with open(path, 'a+') as f:
+def write_csv(workspace, path, content):
+    fullpath = workspace + '/' + path
+    with open(fullpath, 'a+') as f:
         f.write(content + '\n')
 
 def print_param(model):

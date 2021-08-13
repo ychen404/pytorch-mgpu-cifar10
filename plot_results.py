@@ -44,7 +44,7 @@ def plot(y_axis, xlabel=None, ylabel=None, title=None, output='result.png'):
     linecycler = cycle(lines)
 
     fontP = FontProperties()
-    fontP.set_size('large')
+    fontP.set_size('small')
     
     # get the key
     key = list(y_axis.keys())[0]
@@ -87,22 +87,34 @@ def plot(y_axis, xlabel=None, ylabel=None, title=None, output='result.png'):
 
 if __name__ == "__main__":
     args = parse_arguments()
+    
+    #baseline results
+    # edge_data_base_20cls = 'results/useful/baselines_edge_20_classes/acc_baseline_first_20_classes_res8_lambda_1_worker_0_2021-08-09-21-59.csv'
+    # cloud_data_base_20cls = 'results/useful/baselines_edge_20_classes/acc_baseline_first_20_classes_res50_lambda_1_worker_0_2021-08-09-22-01.csv'
+    # # edge_data_full = 'single_model_training_results/acc_cifar100_fulldata_res8_2021-07-29-22-54.csv'
+    # # cloud_data_full = 'single_model_training_results/acc_cifar100_fulldata_res50_2021-07-30-22-39.csv'
+    # dependent_cloud = 'results/alternate_data_res18/distill_alternate_2021-08-11-00-28.csv'
+    edge_data_base_30cls = 'results/res8_30cls_baseline/acc_worker_0_2021-08-11-18-04.csv'
+    dependent_cloud = 'results/alternate_data_3_workers_res18/distill_alternate_2021-08-11-17-03.csv'
+    dependent_cloud_res20 = 'results/alternate_data_3_workers_res20/distill_alternate_2021-08-11-18-59.csv'
+    dependent_cloud_adam = 'results/alternate_data_3_workers_res18_adam_1/distill_alternate_2021-08-13-00-06.csv'
+    cloud_data_base_30cls = 'results/res18_30cls_baseline/acc_worker_0_2021-08-11-18-13.csv'
 
 
-    # edge_data = 'acc_cifar100_ten_classes_lambda_1_worker_0_2021-08-08-01-28.csv'
-    # cloud_data = 'distill_acc_cifar100_ten_classes_lambda_1_worker_0_2021-08-08-01-32.csv'
-
-    # edge_data = 'acc_cifar100_ten_classes_lambda_1_worker_1_2021-08-08-01-43.csv'
-    # cloud_data = 'distill_acc_cifar100_ten_classes_lambda_1_worker_1_2021-08-08-01-47.csv'
-
-
-    edge_data = 'baselines_edge_20_classes/acc_cifar100_baseline_20_classes_res8_worker_0_2021-08-09-19-09.csv'
-    cloud_data = 'baselines_edge_20_classes/acc_cifar100_baseline_20_classes_res50_worker_0_2021-08-09-19-12.csv'
-
+    edge_0_data = 'results/alternate_data_3_workers_res18/acc_worker_0_2021-08-11-16-52.csv'
+    edge_1_data = 'results/alternate_data_3_workers_res18/acc_worker_1_2021-08-11-16-56.csv'
+    edge_2_data = 'results/alternate_data_3_workers_res18/acc_worker_2_2021-08-11-16-59.csv'
 
     data_to_plot = {}
 
-    data_to_plot['Edge'] = collect_data(edge_data)
-    data_to_plot['Cloud'] = collect_data(cloud_data)
+    # data_to_plot['Edge baseline'] = collect_data(edge_data_base_30cls)
+    # data_to_plot['Cloud baseline'] = collect_data(cloud_data_base_30cls)
+    # data_to_plot['Dependent cloud'] = collect_data(dependent_cloud)
+    # data_to_plot['Dependent cloud Res20'] = collect_data(dependent_cloud_res20)
+    # data_to_plot['Dependent cloud Adam'] = collect_data(dependent_cloud_adam)
 
-    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Distillation with private data (ten classes)', output='baseline_20_classes.png')
+    data_to_plot['edge_0'] = collect_data(edge_0_data)
+    data_to_plot['edge_1'] = collect_data(edge_1_data)
+    data_to_plot['edge_2'] = collect_data(edge_2_data)
+
+    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes', output='acc_30cls_w_workers.png')

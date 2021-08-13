@@ -54,6 +54,67 @@ class Net(nn.Module):
         x = self.fc3(x)
         return x
 
+def get_cifar100_transfromtest()-> torchvision.transforms:
+    
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.507, 0.487, 0.441), (0.267, 0.256, 0.276)),
+    ])
+    return transform_test
+
+def extract_classes(
+    train_data, 
+    split, 
+    workerid=0)-> list:
+
+    classes = []
+    total_classes = int(max(train_data.targets) + 1)
+    num_classes = int(total_classes * split)
+    
+    upper = int(max(train_data.targets) * split)
+    # print(f"Upper: {upper}")
+    start = workerid * num_classes + 0
+    end = workerid * num_classes + upper
+    print(f"Worker: {workerid}; start: {start}; end: {end}; num_classes: {num_classes}")
+
+    for data in train_data:
+        if start <= data[1] <= end:
+          classes.append(data)
+    
+    return classes
+
+def split_train_data(
+    train_data, 
+    split=0.5
+    )->torch.utils.data:
+    
+    length = len(train_data)
+    public_part = int(split * length)
+    private_part = length - public_part
+
+    print(f"Length: {length}; public_part: {public_part}, private_part: {private_part} ")
+
+    public, private = torch.utils.data.random_split(train_data, [public_part, private_part])
+
+    return public, private
+
+
+def get_cifar100()->torchvision.datasets:
+
+    print('==> CIFAR-100')
+
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.507, 0.487, 0.441), (0.267, 0.256, 0.276)),
+    ])
+
+    trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
+
+    return trainset
+
+
 
 def load_data() -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
     """Load CIFAR-10 (training and test set)."""
@@ -126,28 +187,29 @@ def train_two(
     
     for epoch in range(epochs):  # loop over the dataset multiple times
         running_loss = 0.0
-        for trainloader in itertools.zip_longest(*pack):
-            # print(f"Length: {len(items)}")
-            # pdb.set_trace()
-            # for i, data in enumerate(trainloader):
-            pdb.set_trace()
-            for i, (images, labels) in enumerate(trainloader):
-                images, labels = images.to(device), labels.to(device)
+        # for trainloader in itertools.zip_longest(*pack):
+        #     for i, (images, labels) in enumerate(trainloader):
 
-                # zero the parameter gradients
-                optimizer.zero_grad()
+        # pdb.set_trace()    
+        for i, data in enumerate(itertools.chain(*pack)):
+            images = data[0]
+            labels = data[1]
+            images, labels = images.to(device), labels.to(device)
 
-                # forward + backward + optimize
-                outputs = net(images)
-                loss = criterion(outputs, labels)
-                loss.backward()
-                optimizer.step()
+            # zero the parameter gradients
+            optimizer.zero_grad()
 
-                # print statistics
-                running_loss += loss.item()
-                if i % 100 == 99:  # print every 100 mini-batches
-                    print("[%d, %5d] loss: %.3f" % (epoch + 1, i + 1, running_loss / 2000))
-                    running_loss = 0.0
+            # forward + backward + optimize
+            outputs = net(images)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+
+            # print statistics
+            running_loss += loss.item()
+            if i % 100 == 99:  # print every 100 mini-batches
+                print("[%d, %5d] loss: %.3f" % (epoch + 1, i + 1, running_loss / 2000))
+                running_loss = 0.0
 
 
 
@@ -183,6 +245,11 @@ def main():
     print("Centralized PyTorch training")
     print("Load data")
     trainloader, testloader = load_data()
+    trainset = get_cifar100()
+    trainset_a, trainset_b = split_train_data(trainset, 0.5)
+    trainloader_a = torch.utils.data.DataLoader(trainset_a, batch_size=128, shuffle=True, num_workers=4)
+    trainloader_b = torch.utils.data.DataLoader(trainset_b, batch_size=128, shuffle=True, num_workers=4)
+
     net = Net().to(DEVICE)
     net.eval()
 

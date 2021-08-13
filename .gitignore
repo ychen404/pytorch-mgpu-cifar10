@@ -95,6 +95,8 @@ pngs/
 single_model_training_results/
 two_worker_results/
 *.csv
+*.png
+*.pth
 
 # Spyder project settings
 .spyderproject
