@@ -15,11 +15,10 @@ import torch
 import logging
 import datetime
 
-
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
-fmt_str = '%(name)s - %(levelname)s - %(message)s'
-fmt_file = '%(asctime)s - %(name)s [%(levelname)s]: %(message)s'
+fmt_str = '%(levelname)s - %(message)s'
+fmt_file = '[%(levelname)s]: %(message)s'
 
 def get_mean_and_std(dataset):
     '''Compute the mean and std value of dataset.'''
@@ -171,3 +170,18 @@ def get_time():
     strtime = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")
     
     return strtime
+
+def get_logger_handler(path):
+    # Create handlers
+    c_handler = logging.StreamHandler()
+    f_handler = logging.FileHandler(path)
+    c_handler.setLevel(logging.DEBUG)
+    f_handler.setLevel(logging.DEBUG)
+
+    # Create formatters and add it to handlers
+    c_format = logging.Formatter(fmt_str)
+    f_format = logging.Formatter(fmt_file)
+    c_handler.setFormatter(c_format)
+    f_handler.setFormatter(f_format)
+
+    return c_handler, f_handler

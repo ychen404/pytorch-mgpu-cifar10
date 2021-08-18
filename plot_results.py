@@ -99,11 +99,15 @@ if __name__ == "__main__":
     dependent_cloud_res20 = 'results/alternate_data_3_workers_res20/distill_alternate_2021-08-11-18-59.csv'
     dependent_cloud_adam = 'results/alternate_data_3_workers_res18_adam_1/distill_alternate_2021-08-13-00-06.csv'
     cloud_data_base_30cls = 'results/res18_30cls_baseline/acc_worker_0_2021-08-11-18-13.csv'
+    cloud_data_res18_labmda_05 = 'results/alternate_data_3_workers_res18_adam_lambda_0.5/distill_alternate_2021-08-16-16-53.csv'
+    cloud_data_res18_lambda_02 = 'results/alternate_data_3_workers_res18_adam_lambda_0.2/distill_alternate_2021-08-16-19-00.csv'
+    cloud_data_res18_lambda_0 = 'results/alternate_data_3_workers_res18_adam_lambda_0/distill_alternate_2021-08-16-22-42.csv'
 
 
     edge_0_data = 'results/alternate_data_3_workers_res18/acc_worker_0_2021-08-11-16-52.csv'
     edge_1_data = 'results/alternate_data_3_workers_res18/acc_worker_1_2021-08-11-16-56.csv'
     edge_2_data = 'results/alternate_data_3_workers_res18/acc_worker_2_2021-08-11-16-59.csv'
+
 
     data_to_plot = {}
 
@@ -111,10 +115,12 @@ if __name__ == "__main__":
     # data_to_plot['Cloud baseline'] = collect_data(cloud_data_base_30cls)
     # data_to_plot['Dependent cloud'] = collect_data(dependent_cloud)
     # data_to_plot['Dependent cloud Res20'] = collect_data(dependent_cloud_res20)
-    # data_to_plot['Dependent cloud Adam'] = collect_data(dependent_cloud_adam)
+    data_to_plot['No true label (lambda=1)'] = collect_data(dependent_cloud_adam)
+    # data_to_plot['edge_0'] = collect_data(edge_0_data)
+    # data_to_plot['edge_1'] = collect_data(edge_1_data)
+    # data_to_plot['edge_2'] = collect_data(edge_2_data)
+    data_to_plot['lambda=0.5'] = collect_data(cloud_data_res18_labmda_05)
+    data_to_plot['lambda=0.2'] = collect_data(cloud_data_res18_lambda_02)
+    data_to_plot['Only True label (lambda=0)'] = collect_data(cloud_data_res18_lambda_0)
 
-    data_to_plot['edge_0'] = collect_data(edge_0_data)
-    data_to_plot['edge_1'] = collect_data(edge_1_data)
-    data_to_plot['edge_2'] = collect_data(edge_2_data)
-
-    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes', output='acc_30cls_w_workers.png')
+    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes (different lambdas)', output='acc_30cls_true_label.png')
