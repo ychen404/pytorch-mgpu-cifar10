@@ -20,14 +20,14 @@
 # adam
 split=0.1
 CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
-                --workspace concat_data_3_workers_res18_adam_lambda_0 \
+                --workspace test_concat \
                 --net res8 \
                 --cloud res18 \
                 --split $split \
                 --split_classes \
                 --dataset cifar100 \
-                --epoch 200 \
-                --cloud_epoch 200 \
+                --epoch 1 \
+                --cloud_epoch 2 \
                 --optimizer adam \
                 --cloud_lr 0.001 \
                 --lr 0.1 \

@@ -326,10 +326,12 @@ def distill_from_multi_workers(
     trainloader_0, 
     trainloader_1, 
     trainloader_2, 
-    device, 
+    device,
+    concat=False,
     lambda_=1
     )->float:
-    
+    """Concat True will combine the data from three workers together"""
+
     logger.debug('\nEpoch: %d' % epoch)
     cloud_net.train()
     logger.debug(f"model.train={cloud_net.training}")
@@ -339,35 +341,87 @@ def distill_from_multi_workers(
     loss_fun = nn.CrossEntropyLoss()
     kd_fun = nn.KLDivLoss(reduction='sum')
     T = 1
+    num_workers = 3 # only consider 3-worker case for now
 
     trainloaders = [trainloader_0, trainloader_1, trainloader_2]
     logger.debug(f"Lenth trainloaders, 0:{len(trainloader_0)}, 1:{len(trainloader_1)}, 2:{len(trainloader_2)}")
 
     counter = 0
+    idx_cnt = 0
+
     logger.debug(f"Lambda: {lambda_}")
     # pack two loaders together and alternate the images 
     for trainloader in itertools.zip_longest(*trainloaders):
         for batch_idx, (inputs, targets) in enumerate(trainloader):
-    # for batch_idx, data in enumerate(itertools.chain(*trainloaders)):
-        # inputs = data[0]
-        # targets = data[1]
-            
             inputs, targets = inputs.to(device), targets.to(device)
-            optimizer.zero_grad()
-            counter += 1
-            logger.debug(f"Counter: {counter}")
-            out_s = cloud_net(inputs)
-            # Use the knowledge from the correct edge model
-            # Only check the first sample is enough        
-            if 0 <= targets[0].item() <= 9:
-                logger.debug(f"Batch idx: {batch_idx}, Worker 0 data")
-                out_t = edge_net_0(inputs)
-            elif 10 <= targets[0].item() <= 19:
-                logger.debug(f"Batch idx: {batch_idx}, Worker 1 data")
-                out_t = edge_net_1(inputs)
-            elif 20 <= targets[0].item() <= 29:
-                logger.debug(f"Batch idx: {batch_idx}, Worker 2 data")
-                out_t = edge_net_2(inputs)
+
+            if concat:
+                inputs_array = []
+                targets_array = []
+                out_t_list = []
+
+                # inputs, targets = inputs.to(device), targets.to(device)
+                counter += 1
+                logger.debug(f"Counter: {counter}")
+                
+                inputs_array.append(inputs)
+                targets_array.append(targets)
+                idx_cnt += 1
+
+                # logger.debug(f"Batch idx: {batch_idx}, max: {max(targets).item()}, min: {min(targets).item()}")
+
+                if min(targets).item() >= 0 and max(targets).item() <= 9:
+                    logger.debug(f"Batch idx: {batch_idx}, Worker 0 data")
+                    out_t_temp = edge_net_0(inputs)
+                elif min(targets).item() >= 10 and max(targets).item() <= 19:
+                    logger.debug(f"Batch idx: {batch_idx}, Worker 1 data")
+                    out_t_temp = edge_net_1(inputs)
+                elif min(targets).item() >= 20 and max(targets).item() <= 29:
+                    logger.debug(f"Batch idx: {batch_idx}, Worker 2 data")
+                    out_t_temp = edge_net_2(inputs)
+                else:
+                    logger.debug(f"Batch idx: {batch_idx}, combined data, max: {max(targets).item()}, min: {min(targets).item()}")
+                    exit()
+
+                # out_s = cloud_net(inputs)
+                # out_t = out_t_temp
+
+                out_t_list.append(out_t_temp)
+
+                isReady = True if idx_cnt == num_workers else False
+                logger.debug(f"isReady: {isReady}, idx_cnt: {idx_cnt}")
+
+                if isReady:
+                    idx_cnt = 0
+                    optimizer.zero_grad()
+                    logger.debug(f"isReady=True")
+                    inputs_array = torch.cat((inputs_array), 0)
+                    out_s = cloud_net(inputs_array)
+
+                #     # Concat the list of out_t tensors
+                    out_t = torch.cat((out_t_list), 0)
+                    assert 'cuda' in out_t.device.type, 'Tensor not in GPU'
+                else:
+                    continue
+
+            else:
+                # inputs, targets = inputs.to(device), targets.to(device)
+                optimizer.zero_grad()
+                counter += 1
+                logger.debug(f"Counter: {counter}")
+                out_s = cloud_net(inputs)
+
+                # Use the knowledge from the correct edge model
+                # Only check the first sample is enough        
+                if 0 <= targets[0].item() <= 9:
+                    logger.debug(f"Batch idx: {batch_idx}, Worker 0 data")
+                    out_t = edge_net_0(inputs)
+                elif 10 <= targets[0].item() <= 19:
+                    logger.debug(f"Batch idx: {batch_idx}, Worker 1 data")
+                    out_t = edge_net_1(inputs)
+                elif 20 <= targets[0].item() <= 29:
+                    logger.debug(f"Batch idx: {batch_idx}, Worker 2 data")
+                    out_t = edge_net_2(inputs)
 
             batch_size = out_s.shape[0]
 
@@ -538,7 +592,7 @@ def run_alternate_distill_multi(
         # trainloss = distill_from_multi_workers(epoch, frozen_edge_0, frozen_edge_1, frozen_edge_2, cloud, optimizer, trainloader_0, trainloader_1, trainloader_2, device)
         trainloss = distill_from_multi_workers(epoch, frozen_edge_0, frozen_edge_1, frozen_edge_2, 
                                                 cloud, optimizer, trainloader_0, trainloader_1, 
-                                                trainloader_2, device, lambda_=0)
+                                                trainloader_2, device, concat=True, lambda_=0)
 
         acc, best_acc = test(epoch, cloud, criterion_cloud, testloader_30cls, device)
 
@@ -700,7 +754,6 @@ if __name__ == "__main__":
             # Use saved loader to save time
             # exist_loader = False
             
-            
             if args.exist_loader:
                 trainloader = torch.load('trainloader_first_10cls.pth')
                 testloader = torch.load('testloader_first_10cls.pth')
@@ -834,7 +887,7 @@ if __name__ == "__main__":
             # run_alternate_distill(net, net_2, cloud_net, args, trainloader, trainloader_2, testloader_20cls, worker_num=0, device=device)
 
             # with 3 workers alternating
-            # run_alternate_distill_multi(net, net_1, net_2, cloud_net, args, trainloader, trainloader_1, trainloader_2, testloader_30cls, worker_num=0, device=device)
+            run_alternate_distill_multi(net, net_1, net_2, cloud_net, args, trainloader, trainloader_1, trainloader_2, testloader_30cls, worker_num=0, device=device)
 
             # concat dataset test
-            run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls, testloader_30cls, worker_num=0, device=device)
+            # run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls, testloader_30cls, worker_num=0, device=device)

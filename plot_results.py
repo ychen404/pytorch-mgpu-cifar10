@@ -102,6 +102,7 @@ if __name__ == "__main__":
     cloud_data_res18_labmda_05 = 'results/alternate_data_3_workers_res18_adam_lambda_0.5/distill_alternate_2021-08-16-16-53.csv'
     cloud_data_res18_lambda_02 = 'results/alternate_data_3_workers_res18_adam_lambda_0.2/distill_alternate_2021-08-16-19-00.csv'
     cloud_data_res18_lambda_0 = 'results/alternate_data_3_workers_res18_adam_lambda_0/distill_alternate_2021-08-16-22-42.csv'
+    cloud_data_res18_lambda_0_hack = 'results/concat_data_3_workers_res18_adam_lambda_0/distill_concat_2021-08-18-17-38.csv'
 
 
     edge_0_data = 'results/alternate_data_3_workers_res18/acc_worker_0_2021-08-11-16-52.csv'
@@ -122,5 +123,7 @@ if __name__ == "__main__":
     data_to_plot['lambda=0.5'] = collect_data(cloud_data_res18_labmda_05)
     data_to_plot['lambda=0.2'] = collect_data(cloud_data_res18_lambda_02)
     data_to_plot['Only True label (lambda=0)'] = collect_data(cloud_data_res18_lambda_0)
+    data_to_plot['Only True label (lambda=0 hack)'] = collect_data(cloud_data_res18_lambda_0_hack)
 
-    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes (different lambdas)', output='acc_30cls_true_label.png')
+
+    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes (different lambdas)', output='acc_30cls_true_label_hack.png')
