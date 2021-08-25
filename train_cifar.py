@@ -779,7 +779,7 @@ if __name__ == "__main__":
             trainset_a, trainset_b = split_train_data(trainset, args.split)
             trainloader = torch.utils.data.DataLoader(trainset_a, batch_size=args.batch_size, shuffle=True, num_workers=4)
         
-        elif args.split != 0 and args.split_classes:
+        elif args.split != 0 and args.split_classes and not args.baseline:
             
             logger.info(f"is it here Using {int(args.split * 100)}% of training data and classifying {int(args.split * 100)}%")
             
@@ -851,17 +851,21 @@ if __name__ == "__main__":
         # use to collect baseline results
         # TODO: simplify the test cases. The test cases are overlapped. 
         # The iid case will never got to run if I don't comment out the large chunk of code above
-        elif args.split != 0 and args.baseline and not args.iid:
-            logger.info(f"Using {int(args.split * 100)}% for simple baseline")
-            trainloader, testloader = get_worker_data(trainset, args, workerid=0)
+        
+        #################################### For baseline test ####################################
+        elif args.split != 0 and args.baseline:
+            if not args.iid:
+                logger.info(f"Using {int(args.split * 100)}% for simple baseline")
+                trainloader, testloader = get_worker_data(trainset, args, workerid=0)
 
-        elif args.split != 0 and args.baseline and args.iid:
-            logger.info(f"Using {int(args.split * 100)}% for iid baseline")
-            extract_trainset = extract_classes(trainset, args.split, workerid=0)
-            # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
-            trainloaders = get_dirichlet_loaders(extract_trainset, alpha=args.alpha)
-            _, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
-
+            else: # iid case
+        # elif args.split != 0 and args.baseline and args.iid:
+                logger.info(f"Using {int(args.split * 100)}% for iid baseline")
+                extract_trainset = extract_classes(trainset, args.split, workerid=0)
+                trainloaders = get_dirichlet_loaders(extract_trainset, alpha=args.alpha)
+                _, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
+        ###########################################################################################
+                exit()
         elif args.split == 0:
             logger.info(f"Using full training data")
             trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=4)
@@ -887,7 +891,7 @@ if __name__ == "__main__":
         
     if args.iid:
         logger.debug("Running iid test")
-        run_train(net, args, trainloaders[0], testloader_30cls, 0, device)
+        run_train(net, args, trainloaders[1], testloader_30cls, 0, device)
     else:
         # Train the first edge model
         run_train(net, args, trainloader, testloader, 0, device)

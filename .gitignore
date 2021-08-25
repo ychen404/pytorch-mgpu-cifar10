@@ -7,7 +7,7 @@ __pycache__/
 *.so
 
 # Distribution / packaging
-*data*
+# *data*
 *checkpoint*
 .Python
 build/
@@ -97,6 +97,8 @@ two_worker_results/
 *.csv
 *.png
 *.pth
+data/
+dataset/
 
 # Spyder project settings
 .spyderproject
