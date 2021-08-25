@@ -19,7 +19,6 @@
 # alternate_data_3_workers_res18_adam_lambda_0
 # concat_data_3_workers_res18_adam_lambda_0_baseline_lambda_0
 
-
 # adam
 split=0.1
 CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \

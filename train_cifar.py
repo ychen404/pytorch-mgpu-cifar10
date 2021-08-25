@@ -55,9 +55,6 @@ def parse_arguments():
     parser.add_argument('--save_loader', action='store_true', help="save trainloaders")
     parser.add_argument('--alpha', default=100, type=float, help='alpha for iid setting')
 
-
-
-
     args = parser.parse_args()
 
     return args
@@ -678,7 +675,6 @@ def run_concat_distill_multi(
         trainloss = distill_from_concat_multi_workers(epoch, frozen_edge_0, frozen_edge_1, frozen_edge_2, 
                                                 cloud, optimizer, trainloader_concat, device, average_method='weighted', lambda_=0.5)
         
-
         acc, best_acc = test(epoch, cloud, criterion_cloud, testloader_30cls, device)
 
         logger.debug(f"The result is: {acc}")
