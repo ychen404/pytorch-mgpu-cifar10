@@ -102,28 +102,47 @@ if __name__ == "__main__":
     cloud_data_res18_labmda_05 = 'results/alternate_data_3_workers_res18_adam_lambda_0.5/distill_alternate_2021-08-16-16-53.csv'
     cloud_data_res18_lambda_02 = 'results/alternate_data_3_workers_res18_adam_lambda_0.2/distill_alternate_2021-08-16-19-00.csv'
     cloud_data_res18_lambda_0 = 'results/alternate_data_3_workers_res18_adam_lambda_0/distill_alternate_2021-08-16-22-42.csv'
-    cloud_data_res18_lambda_0_hack = 'results/concat_data_3_workers_res18_adam_lambda_0/distill_concat_2021-08-18-17-38.csv'
-
-
+    cloud_data_res18_lambda_0_baseline = 'results/concat_data_3_workers_res18_adam_lambda_0/distill_concat_2021-08-18-17-38.csv'
+    cloud_data_res18_lambda_0_concat = 'results/concat_data_3_workers_res18_adam_lambda_0/distill_alternate_2021-08-19-00-01.csv'
     edge_0_data = 'results/alternate_data_3_workers_res18/acc_worker_0_2021-08-11-16-52.csv'
     edge_1_data = 'results/alternate_data_3_workers_res18/acc_worker_1_2021-08-11-16-56.csv'
     edge_2_data = 'results/alternate_data_3_workers_res18/acc_worker_2_2021-08-11-16-59.csv'
 
 
+    # 8/24
+    cloud_data_lambda_0_5_average = 'results/concat_data_3_workers_average_softmax_lambda_0.5/distill_concat_2021-08-24-00-07.csv'
+    cloud_data_lambda_0_5_weighted = 'results/concat_data_3_workers_average_softmax_lambda_weighted_0.5/distill_concat_2021-08-24-06-31.csv'
+
+    iid_cloud_baseline = 'results/iid_cloud_baseline/acc_worker_0_2021-08-24-16-42.csv'
+    iid_edge_baseline = 'results/iid_edge_baseline/acc_worker_0_2021-08-24-16-41.csv'
+
+
     data_to_plot = {}
 
-    # data_to_plot['Edge baseline'] = collect_data(edge_data_base_30cls)
     # data_to_plot['Cloud baseline'] = collect_data(cloud_data_base_30cls)
     # data_to_plot['Dependent cloud'] = collect_data(dependent_cloud)
     # data_to_plot['Dependent cloud Res20'] = collect_data(dependent_cloud_res20)
-    data_to_plot['No true label (lambda=1)'] = collect_data(dependent_cloud_adam)
+    # data_to_plot['No true label (lambda=1)'] = collect_data(dependent_cloud_adam)
+
     # data_to_plot['edge_0'] = collect_data(edge_0_data)
     # data_to_plot['edge_1'] = collect_data(edge_1_data)
     # data_to_plot['edge_2'] = collect_data(edge_2_data)
-    data_to_plot['lambda=0.5'] = collect_data(cloud_data_res18_labmda_05)
-    data_to_plot['lambda=0.2'] = collect_data(cloud_data_res18_lambda_02)
-    data_to_plot['Only True label (lambda=0)'] = collect_data(cloud_data_res18_lambda_0)
-    data_to_plot['Only True label (lambda=0 hack)'] = collect_data(cloud_data_res18_lambda_0_hack)
+
+    # data_to_plot['lambda=0.5'] = collect_data(cloud_data_res18_labmda_05)
+    # data_to_plot['lambda=0.2'] = collect_data(cloud_data_res18_lambda_02)
+
+    # data_to_plot['Only True label (lambda=0)'] = collect_data(cloud_data_res18_lambda_0)
+    # data_to_plot['Only True label (lambda=0 baseline)'] = collect_data(cloud_data_res18_lambda_0_baseline)
+    # data_to_plot['Only True label (lambda=0 concat)'] = collect_data(cloud_data_res18_lambda_0_concat)
+
+    # data_to_plot['lambda=0.5 weighted'] = collect_data(cloud_data_lambda_0_5_weighted)
+    # data_to_plot['lambda=0.5 average'] = collect_data(cloud_data_lambda_0_5_average)
+    # data_to_plot['lambda=0.5 alternating batches'] = collect_data(cloud_data_res18_labmda_05)
+    # data_to_plot['Edge baseline'] = collect_data(edge_data_base_30cls)
+
+    data_to_plot['IID cloud baseline'] = collect_data(iid_cloud_baseline)
+    data_to_plot['IID edge baseline'] = collect_data(iid_edge_baseline)
 
 
-    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes (different lambdas)', output='acc_30cls_true_label_hack.png')
+    # plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes (different lambdas)', output='acc_30cls_baseline_vs_weighted_w_edge.png')
+    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes (IID)', output='acc_30cls_iid.png')

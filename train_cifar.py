@@ -28,22 +28,6 @@ logger.setLevel('DEBUG')
 fmt_str = '%(levelname)s - %(message)s'
 fmt_file = '[%(levelname)s]: %(message)s'
 
-# Create handlers
-# c_handler = logging.StreamHandler()
-# f_handler = logging.FileHandler('output.log')
-# c_handler.setLevel(logging.DEBUG)
-# f_handler.setLevel(logging.DEBUG)
-
-# # Create formatters and add it to handlers
-# c_format = logging.Formatter(fmt_str)
-# f_format = logging.Formatter(fmt_file)
-# c_handler.setFormatter(c_format)
-# f_handler.setFormatter(f_format)
-
-# Add handlers to the logger
-# logger.addHandler(c_handler)
-# logger.addHandler(f_handler)
-
 def parse_arguments():
 
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
@@ -56,16 +40,21 @@ def parse_arguments():
     parser.add_argument('--cloud', type=str, default='res18')
     parser.add_argument('--dataset', type=str, default='cifar10')
     parser.add_argument('--batch_size', type=int, default='128')
+    parser.add_argument('--cloud_batch_size', type=int, default='128')
     parser.add_argument('--workspace', default='')
     parser.add_argument("--split", default=0.5, type=float, help="split training data")
     parser.add_argument("--split_classes", action='store_true', help='split the number of classes to reduce difficulty')
     parser.add_argument("--baseline", action='store_true', help='Perform only training for collection baseline')
-    parser.add_argument('--temperature', default=5, type=float, help='temperature for distillation')
+    parser.add_argument('--temperature', default=1, type=float, help='temperature for distillation')
     parser.add_argument('--optimizer', default='sgd')
     parser.add_argument('--two', action='store_true')
+    parser.add_argument('--iid', action='store_true', help="test iid case")
     parser.add_argument('--alternate', action='store_true', help="test the alternative case")
+    parser.add_argument('--public_distill', action='store_true', help="use public data to distill")
     parser.add_argument('--exist_loader', action='store_true', help="there is exist loader")
     parser.add_argument('--save_loader', action='store_true', help="save trainloaders")
+    parser.add_argument('--alpha', default=100, type=float, help='alpha for iid setting')
+
 
 
 
@@ -385,7 +374,7 @@ def distill_from_multi_workers(
 
                 # out_s = cloud_net(inputs)
                 # out_t = out_t_temp
-
+                logger.debug(f"out_t_temp shape: {out_t_temp.shape}")
                 out_t_list.append(out_t_temp)
 
                 isReady = True if idx_cnt == num_workers else False
@@ -397,6 +386,7 @@ def distill_from_multi_workers(
                     logger.debug(f"isReady=True")
                     inputs_array = torch.cat((inputs_array), 0)
                     out_s = cloud_net(inputs_array)
+                    logger.debug(f"out_s shape: {out_s.shape}")
 
                 #     # Concat the list of out_t tensors
                     out_t = torch.cat((out_t_list), 0)
@@ -424,6 +414,8 @@ def distill_from_multi_workers(
                     out_t = edge_net_2(inputs)
 
             batch_size = out_s.shape[0]
+            logger.debug(f"Retrieved batch size: {batch_size}")
+
 
             s_max = F.log_softmax(out_s / T, dim=1)
             t_max = F.softmax(out_t / T, dim=1)
@@ -444,6 +436,25 @@ def distill_from_multi_workers(
     return train_loss/(batch_idx+1)
 
 
+def count_targets(targets):
+    alpha, beta, gamma = 0, 0, 0
+    batch_size = targets.shape[0]
+    # Now only works for 30 classes
+    for target in targets:
+        if 0 <= target.item() <= 9:
+            alpha += 1
+        elif 10 <= target.item() <= 19:
+            beta += 1
+        else:
+            gamma += 1
+    
+    alpha /= batch_size
+    beta /= batch_size
+    gamma /= batch_size
+
+    logger.debug(f"alpha: {alpha}, beta: {beta}, gamma: {gamma}")
+    return alpha, beta, gamma 
+
 def distill_from_concat_multi_workers(
     epoch, 
     edge_net_0, 
@@ -452,9 +463,14 @@ def distill_from_concat_multi_workers(
     cloud_net, 
     optimizer, 
     trainloader_concat, 
-    device, 
-    lambda_=1
+    device,
+    average_method,
+    lambda_,
     )->float:
+    """ 
+    This function is a hack for using 30 classes training data for distillation
+    Here I directly use the trainloader that contains the first 30 classes, so it can only provide a baseline
+    """
     
     logger.debug('\nEpoch: %d' % epoch)
     cloud_net.train()
@@ -466,32 +482,49 @@ def distill_from_concat_multi_workers(
     kd_fun = nn.KLDivLoss(reduction='sum')
     T = 1
 
-
     counter = 0
     logger.debug(f"Lambda: {lambda_}")
-    for batch_idx, (inputs, targets) in enumerate(trainloader_concat):           
+    for batch_idx, (inputs, targets) in enumerate(trainloader_concat):
         inputs, targets = inputs.to(device), targets.to(device)
+        alpha, beta, gamma = count_targets(targets)
         optimizer.zero_grad()
         counter += 1
         logger.debug(f"Counter: {counter}")
         out_s = cloud_net(inputs)
-
+        
         # Use the knowledge from the correct edge model
-        # Only check the first sample is enough        
-        if 0 <= targets[0].item() <= 9:
-            logger.debug(f"Batch idx: {batch_idx}, Worker 0 data")
-            out_t = edge_net_0(inputs)
-        elif 10 <= targets[0].item() <= 19:
-            logger.debug(f"Batch idx: {batch_idx}, Worker 1 data")
-            out_t = edge_net_1(inputs)
-        elif 20 <= targets[0].item() <= 29:
-            logger.debug(f"Batch idx: {batch_idx}, Worker 2 data")
-            out_t = edge_net_2(inputs)
+        # Only check the first sample is enough
+        # if 0 <= targets[0].item() <= 9:
+        #     logger.debug(f"Batch idx: {batch_idx}, Worker 0 data")
+        #     out_t = edge_net_0(inputs)
+        # elif 10 <= targets[0].item() <= 19:
+        #     logger.debug(f"Batch idx: {batch_idx}, Worker 1 data")
+        #     out_t = edge_net_1(inputs)
+        # elif 20 <= targets[0].item() <= 29:
+        #     logger.debug(f"Batch idx: {batch_idx}, Worker 2 data")
+        #     out_t = edge_net_2(inputs)
 
         batch_size = out_s.shape[0]
 
+        #TODO: use an array of edge models instead later
+        # you can use torch.zeros(128,100) to create the placeholder 
+
+        out_t_0 = edge_net_0(inputs)
+        t_max_0 = F.softmax(out_t_0 / T, dim=1)
+
+        out_t_1 = edge_net_1(inputs)
+        t_max_1 = F.softmax(out_t_1 / T, dim=1)
+
+        out_t_2 = edge_net_2(inputs)
+        t_max_2 = F.softmax(out_t_2 / T, dim=1)
+
         s_max = F.log_softmax(out_s / T, dim=1)
-        t_max = F.softmax(out_t / T, dim=1)
+        
+        if average_method == 'equal':
+            t_max = (t_max_0 + t_max_1 + t_max_2) / 3
+        else: # weighted
+            logger.debug(f"Weighted average")
+            t_max = alpha * t_max_0 + beta * t_max_1 + gamma * t_max_2
 
         loss_kd = kd_fun(s_max, t_max) / batch_size
         loss = loss_fun(out_s, targets)
@@ -643,7 +676,7 @@ def run_concat_distill_multi(
         # trainloss = distill_from_multi_workers(epoch, frozen_edge_0, frozen_edge_1, frozen_edge_2, cloud, optimizer, trainloader_0, trainloader_1, trainloader_2, device)
         # TODO: need to change the distill from multi workers to support array of trainloaders and workers. Now it is a hacky method 
         trainloss = distill_from_concat_multi_workers(epoch, frozen_edge_0, frozen_edge_1, frozen_edge_2, 
-                                                cloud, optimizer, trainloader_concat, device, lambda_=0)
+                                                cloud, optimizer, trainloader_concat, device, average_method='weighted', lambda_=0.5)
         
 
         acc, best_acc = test(epoch, cloud, criterion_cloud, testloader_30cls, device)
@@ -655,7 +688,6 @@ def run_concat_distill_multi(
     logger.debug("===> BEST ACC. DISTILLATION: %.2f%%" % (best_acc))
 
     return cloud
-
 
 
 def run_distill(
@@ -723,6 +755,7 @@ if __name__ == "__main__":
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     start_epoch = 0  # start from epoch 0 or last checkpoint epoch
     torch.manual_seed(0)
+    print(args)
 
     root = 'results/' + args.workspace
     check_dir(root)
@@ -742,6 +775,9 @@ if __name__ == "__main__":
         trainset = get_cifar100()
         transform_test = get_cifar100_transfromtest()
 
+        if args.public_distill: # set the public distill to 0.5 for now
+            trainset_public, trainset_private = split_train_data(trainset, 0.5)
+
         if args.split != 0 and not args.split_classes:
             logger.info(f"Using {int(args.split * 100)}% of training data, classifying all classes")
             trainset_a, trainset_b = split_train_data(trainset, args.split)
@@ -749,20 +785,19 @@ if __name__ == "__main__":
         
         elif args.split != 0 and args.split_classes:
             
-            logger.info(f"Using {int(args.split * 100)}% of training data and classifying {int(args.split * 100)}%")
-            
-            # Use saved loader to save time
-            # exist_loader = False
+            logger.info(f"is it here Using {int(args.split * 100)}% of training data and classifying {int(args.split * 100)}%")
             
             if args.exist_loader:
                 trainloader = torch.load('trainloader_first_10cls.pth')
                 testloader = torch.load('testloader_first_10cls.pth')
-
+            
             else:
-                trainloader, testloader = get_worker_data(trainset, args, workerid=0)
-            
-            # save_loader = True # Save the loaders
-            
+                if args.public_distill:
+                    trainloader, testloader = get_worker_data(trainset_private, args, workerid=0)
+
+                else:
+                    trainloader, testloader = get_worker_data(trainset, args, workerid=0)
+
             logger.debug(f"exist_loader: {args.exist_loader}, save_loader: {args.save_loader}")
 
             if args.save_loader:
@@ -787,13 +822,21 @@ if __name__ == "__main__":
                     logger.debug("Done loading loaders")
 
                 else:
-                    logger.debug("In the else condition")
-                    trainloader_1, testloader_1 = get_worker_data(trainset, args, workerid=1)
-                    trainloader_2, testloader_2 = get_worker_data(trainset, args, workerid=2)
-                    # get a test loader for the first 20 classes
-                    _, testloader_20cls = get_worker_data_hardcode(trainset, 0.2, workerid=0)
-                    _, testloader_20cls_disjoint = get_worker_data_hardcode(trainset, 0.2, workerid=0, disjoint=True)
-                    trainloader_30cls, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
+                    if args.public_distill:
+                        logger.debug("In the public_distill condition")
+                        trainloader_1, testloader_1 = get_worker_data(trainset_private, args, workerid=1)
+                        trainloader_2, testloader_2 = get_worker_data(trainset_private, args, workerid=2)
+                        _, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
+                        trainloader_30cls_public = get_loader(trainset_public, args)
+
+                    else:
+                        logger.debug("In the else condition")
+                        trainloader_1, testloader_1 = get_worker_data(trainset, args, workerid=1)
+                        trainloader_2, testloader_2 = get_worker_data(trainset, args, workerid=2)
+                        # get a test loader for the first 20 classes
+                        _, testloader_20cls = get_worker_data_hardcode(trainset, 0.2, workerid=0)
+                        _, testloader_20cls_disjoint = get_worker_data_hardcode(trainset, 0.2, workerid=0, disjoint=True)
+                        trainloader_30cls, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
 
                 if args.save_loader:
                     torch.save(trainloader_1, 'trainloader_second_10cls.pth')
@@ -810,9 +853,18 @@ if __name__ == "__main__":
                     exit()
 
         # use to collect baseline results
-        elif args.split != 0 and args.baseline:
-            logger.info(f"Using {int(args.split * 100)}% for baseline")
+        # TODO: simplify the test cases. The test cases are overlapped. 
+        # The iid case will never got to run if I don't comment out the large chunk of code above
+        elif args.split != 0 and args.baseline and not args.iid:
+            logger.info(f"Using {int(args.split * 100)}% for simple baseline")
             trainloader, testloader = get_worker_data(trainset, args, workerid=0)
+
+        elif args.split != 0 and args.baseline and args.iid:
+            logger.info(f"Using {int(args.split * 100)}% for iid baseline")
+            extract_trainset = extract_classes(trainset, args.split, workerid=0)
+            # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
+            trainloaders = get_dirichlet_loaders(extract_trainset, alpha=args.alpha)
+            _, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
 
         elif args.split == 0:
             logger.info(f"Using full training data")
@@ -837,8 +889,13 @@ if __name__ == "__main__":
     if args.resume:
         load_checkpoint()
         
-    # Train the first edge model
-    run_train(net, args, trainloader, testloader, 0, device)
+    if args.iid:
+        logger.debug("Running iid test")
+        run_train(net, args, trainloaders[0], testloader_30cls, 0, device)
+    else:
+        # Train the first edge model
+        run_train(net, args, trainloader, testloader, 0, device)
+
     logger.debug(30*'*' + 'Before Distilling from worker 0' + 30*'*')
     
     if args.baseline:
@@ -887,7 +944,10 @@ if __name__ == "__main__":
             # run_alternate_distill(net, net_2, cloud_net, args, trainloader, trainloader_2, testloader_20cls, worker_num=0, device=device)
 
             # with 3 workers alternating
-            run_alternate_distill_multi(net, net_1, net_2, cloud_net, args, trainloader, trainloader_1, trainloader_2, testloader_30cls, worker_num=0, device=device)
+            # run_alternate_distill_multi(net, net_1, net_2, cloud_net, args, trainloader, trainloader_1, trainloader_2, testloader_30cls, worker_num=0, device=device)
 
-            # concat dataset test
+            # concat dataset hack test
             # run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls, testloader_30cls, worker_num=0, device=device)
+
+            # use public to distill
+            run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls_public, testloader_30cls, worker_num=0, device=device)
