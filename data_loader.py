@@ -91,8 +91,9 @@ def extract_classes(train_data, split, workerid=0):
     
     logger.debug(f"Worker: {workerid}; start: {start}; end: {end}; num_classes: {num_classes}")
 
+    # Pay attention to the bounds
     for data in train_data:
-        if start <= data[1] <= end:
+        if start <= data[1] < end:
           classes.append(data)
     
     return classes
@@ -143,7 +144,9 @@ def get_worker_data_hardcode(
         extract_testset = extract_trainset_1 + extract_trainset_2
     else:
         extract_testset = extract_classes(testset, split, workerid)
-        
+        logger.debug(f"Length testset: {len(testset)}")
+
+    logger.debug(f"Length extract_testset: {len(extract_testset)}")
     testloader = torch.utils.data.DataLoader(extract_testset, batch_size=128, shuffle=False, num_workers=4)
 
     return trainloader, testloader

@@ -462,7 +462,8 @@ def distill_from_concat_multi_workers(
     trainloader_concat, 
     device,
     average_method,
-    lambda_,
+    selection=False,
+    lambda_=0.5,
     )->float:
     """ 
     This function is a hack for using 30 classes training data for distillation
@@ -488,7 +489,6 @@ def distill_from_concat_multi_workers(
         counter += 1
         logger.debug(f"Counter: {counter}")
         out_s = cloud_net(inputs)
-        
         # Use the knowledge from the correct edge model
         # Only check the first sample is enough
         # if 0 <= targets[0].item() <= 9:
@@ -502,26 +502,46 @@ def distill_from_concat_multi_workers(
         #     out_t = edge_net_2(inputs)
 
         batch_size = out_s.shape[0]
+        s_max = F.log_softmax(out_s / T, dim=1)
+
+        if selection: # direct the data to edge worker based on classes 
+            out_t_temp = []
+            logger.debug(f"Selection")
+            logger.debug(f"inputs: {inputs.shape}, targets: {targets.shape}")
+            for input, target in zip(inputs, targets):
+                # need to use unsqueeze to change a 3-dimensional image to 4-dimensional
+                # [3,32,32] -> [1,3,32,32]
+                input = input.unsqueeze(0)
+                # pdb.set_trace()
+                if 0 <= target.item() <= 9 :
+                    out_t_temp.append (edge_net_0(input))
+                elif 10 <= target.item() <= 19 :
+                    out_t_temp.append (edge_net_1(input))
+                else:
+                    out_t_temp.append (edge_net_2(input))
+                # out_t_temp.append (edge_net_0(input))
+            logger.debug(f"len out_t_temp: {len(out_t_temp)}")
+            out_t = torch.cat(out_t_temp, dim=0) # use dim 0 to stack the tensors
+            assert out_t.shape[1] == 100, f"the shape is {out_t.shape}, should be (x, 100)"
+            t_max = F.softmax(out_t / T, dim=1)
 
         #TODO: use an array of edge models instead later
         # you can use torch.zeros(128,100) to create the placeholder 
+        else:
+            out_t_0 = edge_net_0(inputs)
+            t_max_0 = F.softmax(out_t_0 / T, dim=1)
 
-        out_t_0 = edge_net_0(inputs)
-        t_max_0 = F.softmax(out_t_0 / T, dim=1)
+            out_t_1 = edge_net_1(inputs)
+            t_max_1 = F.softmax(out_t_1 / T, dim=1)
 
-        out_t_1 = edge_net_1(inputs)
-        t_max_1 = F.softmax(out_t_1 / T, dim=1)
+            out_t_2 = edge_net_2(inputs)
+            t_max_2 = F.softmax(out_t_2 / T, dim=1)
 
-        out_t_2 = edge_net_2(inputs)
-        t_max_2 = F.softmax(out_t_2 / T, dim=1)
-
-        s_max = F.log_softmax(out_s / T, dim=1)
-        
-        if average_method == 'equal':
-            t_max = (t_max_0 + t_max_1 + t_max_2) / 3
-        else: # weighted
-            logger.debug(f"Weighted average")
-            t_max = alpha * t_max_0 + beta * t_max_1 + gamma * t_max_2
+            if average_method == 'equal':
+                t_max = (t_max_0 + t_max_1 + t_max_2) / 3
+            else: # weighted
+                logger.debug(f"Weighted average")
+                t_max = alpha * t_max_0 + beta * t_max_1 + gamma * t_max_2
 
         loss_kd = kd_fun(s_max, t_max) / batch_size
         loss = loss_fun(out_s, targets)
@@ -672,8 +692,14 @@ def run_concat_distill_multi(
         
         # trainloss = distill_from_multi_workers(epoch, frozen_edge_0, frozen_edge_1, frozen_edge_2, cloud, optimizer, trainloader_0, trainloader_1, trainloader_2, device)
         # TODO: need to change the distill from multi workers to support array of trainloaders and workers. Now it is a hacky method 
-        trainloss = distill_from_concat_multi_workers(epoch, frozen_edge_0, frozen_edge_1, frozen_edge_2, 
-                                                cloud, optimizer, trainloader_concat, device, average_method='weighted', lambda_=0.5)
+        trainloss = distill_from_concat_multi_workers(epoch, 
+                                                    frozen_edge_0, 
+                                                    frozen_edge_1, 
+                                                    frozen_edge_2, 
+                                                    cloud, 
+                                                    optimizer, 
+                                                    trainloader_concat, 
+                                                    device, average_method='weighted', selection=False, lambda_=1)
         
         acc, best_acc = test(epoch, cloud, criterion_cloud, testloader_30cls, device)
 
@@ -863,9 +889,12 @@ if __name__ == "__main__":
                 logger.info(f"Using {int(args.split * 100)}% for iid baseline")
                 extract_trainset = extract_classes(trainset, args.split, workerid=0)
                 trainloaders = get_dirichlet_loaders(extract_trainset, alpha=args.alpha)
+
                 _, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
+                pdb.set_trace()
+
         ###########################################################################################
-                exit()
+        
         elif args.split == 0:
             logger.info(f"Using full training data")
             trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=4)
@@ -891,7 +920,7 @@ if __name__ == "__main__":
         
     if args.iid:
         logger.debug("Running iid test")
-        run_train(net, args, trainloaders[1], testloader_30cls, 0, device)
+        run_train(net, args, trainloaders[0], testloader_30cls, 0, device)
     else:
         # Train the first edge model
         run_train(net, args, trainloader, testloader, 0, device)
@@ -946,8 +975,8 @@ if __name__ == "__main__":
             # with 3 workers alternating
             # run_alternate_distill_multi(net, net_1, net_2, cloud_net, args, trainloader, trainloader_1, trainloader_2, testloader_30cls, worker_num=0, device=device)
 
-            # concat dataset hack test
-            # run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls, testloader_30cls, worker_num=0, device=device)
+            # concat dataset
+            run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls, testloader_30cls, worker_num=0, device=device)
 
             # use public to distill
-            run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls_public, testloader_30cls, worker_num=0, device=device)
+            # run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls_public, testloader_30cls, worker_num=0, device=device)

@@ -68,9 +68,31 @@ train_loader = torch.utils.data.DataLoader(extract_trainset,
                                           pin_memory=True, shuffle=False)
 
 counter = {}
+
+# count
+# for idx, (images, targets) in enumerate(train_loader):
+#     if idx == 0:
+#         alpha, beta, gamma = 0, 0, 0
+#         print(f"batch size = {targets.shape[0]}")
+#         for target in targets:
+#         # counter[target.tolist()] = counter.get(target.tolist(), 0) + 1
+#             if 0 <= target.item() <= 9:
+#                 alpha += 1
+#             elif 10 <= target.item() <= 19:
+#                 beta += 1
+#             else:
+#                 gamma += 1
+#     else:
+#         break
+# print(f"alpha: {alpha}, beta: {beta}, gamma: {gamma}")
+
 for idx, (images, targets) in enumerate(train_loader):
     if idx == 0:
-        alpha, beta, gamma = 0, 0, 0
+        for (image, target) in zip(images, targets):
+            print(image.shape, target.item())
+            image = image.unsqueeze(0)
+            print(image.shape)
+            exit()
         print(f"batch size = {targets.shape[0]}")
         for target in targets:
         # counter[target.tolist()] = counter.get(target.tolist(), 0) + 1
@@ -82,8 +104,6 @@ for idx, (images, targets) in enumerate(train_loader):
                 gamma += 1
     else:
         break
-
-print(f"alpha: {alpha}, beta: {beta}, gamma: {gamma}")
 
 sum_v = 0
 

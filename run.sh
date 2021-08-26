@@ -19,23 +19,25 @@
 # alternate_data_3_workers_res18_adam_lambda_0
 # concat_data_3_workers_res18_adam_lambda_0_baseline_lambda_0
 
+# data_selection_distill_3_workers_lambda_0.5
+
 # adam
-# split=0.1
-# CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
-#                 --workspace public_data_distill_3_workers_lambda_0.5 \
-#                 --net res8 \
-#                 --cloud res18 \
-#                 --split $split \
-#                 --split_classes \
-#                 --dataset cifar100 \
-#                 --epoch 200 \
-#                 --cloud_epoch 200 \
-#                 --optimizer adam \
-#                 --cloud_lr 0.001 \
-#                 --lr 0.1 \
-#                 --two \
-#                 --public_distill \
-#                 --alternate
+split=0.1
+CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
+                --workspace concat_data_3_workers_res18_adam_lambda_1 \
+                --net res8 \
+                --cloud res18 \
+                --split $split \
+                --split_classes \
+                --dataset cifar100 \
+                --epoch 200 \
+                --cloud_epoch 200 \
+                --optimizer adam \
+                --cloud_lr 0.001 \
+                --lr 0.1 \
+                --two \
+                --exist_loader \
+                --alternate
 
 # SGD
 # split=0.1
@@ -69,16 +71,17 @@
                 # --alternate \
 
 # IID baseline case
-split=0.3
-CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
-                --workspace iid_cloud_baseline_use_the_third \
-                --net res18 \
-                --split $split \
-                --split_classes \
-                --dataset cifar100 \
-                --epoch 200 \
-                --iid \
-                --baseline \
-                --lr 0.1
-                # --two \
-                # --alternate \
+# iid_cloud_baseline_use_first_again
+# split=0.3
+# CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+#                 --workspace iid_cloud_baseline_debug \
+#                 --net res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --dataset cifar100 \
+#                 --epoch 200 \
+#                 --iid \
+#                 --baseline \
+#                 --lr 0.1
+#                 # --two \
+#                 # --alternate \

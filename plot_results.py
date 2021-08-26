@@ -114,8 +114,11 @@ if __name__ == "__main__":
     cloud_data_lambda_0_5_weighted = 'results/concat_data_3_workers_average_softmax_lambda_weighted_0.5/distill_concat_2021-08-24-06-31.csv'
 
     iid_cloud_baseline = 'results/iid_cloud_baseline/acc_worker_0_2021-08-24-16-42.csv'
-    iid_edge_baseline = 'results/iid_edge_baseline/acc_worker_0_2021-08-24-16-41.csv'
+    # iid_edge_baseline = 'results/iid_edge_baseline/acc_worker_0_2021-08-24-16-41.csv'
+    iid_edge_baseline = 'results/iid_cloud_baseline_use_first_again/acc_worker_0_2021-08-25-16-23.csv'
 
+    # 8/25
+    cloud_public_distill_lambda_0_5 = 'results/public_data_distill_3_workers_lambda_0.5/distill_concat_2021-08-25-04-35.csv'
 
     data_to_plot = {}
 
@@ -132,17 +135,18 @@ if __name__ == "__main__":
     # data_to_plot['lambda=0.2'] = collect_data(cloud_data_res18_lambda_02)
 
     # data_to_plot['Only True label (lambda=0)'] = collect_data(cloud_data_res18_lambda_0)
-    # data_to_plot['Only True label (lambda=0 baseline)'] = collect_data(cloud_data_res18_lambda_0_baseline)
+    data_to_plot['Only True label (lambda=0 baseline)'] = collect_data(cloud_data_res18_lambda_0_baseline)
     # data_to_plot['Only True label (lambda=0 concat)'] = collect_data(cloud_data_res18_lambda_0_concat)
 
-    # data_to_plot['lambda=0.5 weighted'] = collect_data(cloud_data_lambda_0_5_weighted)
+    data_to_plot['Private data lambda=0.5'] = collect_data(cloud_data_lambda_0_5_weighted)
     # data_to_plot['lambda=0.5 average'] = collect_data(cloud_data_lambda_0_5_average)
+    data_to_plot['Public data lambda=0.5'] = collect_data(cloud_public_distill_lambda_0_5)
     # data_to_plot['lambda=0.5 alternating batches'] = collect_data(cloud_data_res18_labmda_05)
     # data_to_plot['Edge baseline'] = collect_data(edge_data_base_30cls)
 
-    data_to_plot['IID cloud baseline'] = collect_data(iid_cloud_baseline)
-    data_to_plot['IID edge baseline'] = collect_data(iid_edge_baseline)
+    # data_to_plot['IID cloud baseline'] = collect_data(iid_cloud_baseline)
+    # data_to_plot['IID edge baseline'] = collect_data(iid_edge_baseline)
 
 
-    # plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes (different lambdas)', output='acc_30cls_baseline_vs_weighted_w_edge.png')
-    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes (IID)', output='acc_30cls_iid.png')
+    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes', output='acc_30cls_public_distill_weighted.png')
+    # plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes (IID)', output='acc_30cls_iid_new.png')
