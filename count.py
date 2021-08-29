@@ -93,26 +93,15 @@ for idx, (images, targets) in enumerate(train_loader):
             image = image.unsqueeze(0)
             print(image.shape)
             exit()
-        print(f"batch size = {targets.shape[0]}")
-        for target in targets:
-        # counter[target.tolist()] = counter.get(target.tolist(), 0) + 1
-            if 0 <= target.item() <= 9:
-                alpha += 1
-            elif 10 <= target.item() <= 19:
-                beta += 1
-            else:
-                gamma += 1
-    else:
-        break
 
 sum_v = 0
 
-for k, v in counter.items():
-    sum_v += v
-print(f"total: {sum_v}")
-alpha /= 128
-beta /= 128
-gamma /= 128
+# for k, v in counter.items():
+#     sum_v += v
+# print(f"total: {sum_v}")
+# alpha /= 128
+# beta /= 128
+# gamma /= 128
 
-print(f"alpha: {alpha}, beta: {beta}, gamma: {gamma}")
+# print(f"alpha: {alpha}, beta: {beta}, gamma: {gamma}")
 

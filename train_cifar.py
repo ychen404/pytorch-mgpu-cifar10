@@ -54,6 +54,8 @@ def parse_arguments():
     parser.add_argument('--exist_loader', action='store_true', help="there is exist loader")
     parser.add_argument('--save_loader', action='store_true', help="save trainloaders")
     parser.add_argument('--alpha', default=100, type=float, help='alpha for iid setting')
+    parser.add_argument('--lamb', default=0.5, type=float, help='lambda for distillation')
+    parser.add_argument('--selection', action='store_true', help="enable selection method")
 
     args = parser.parse_args()
 
@@ -94,7 +96,7 @@ def train(epoch, net, criterion, optimizer, trainloader, device):
     return train_loss/(batch_idx+1)
 
 
-def test(epoch, net, criterion, testloader, device):
+def test(epoch, net, criterion, testloader, device, msg):
 
     best_acc = 0
     net.eval()
@@ -132,7 +134,7 @@ def test(epoch, net, criterion, testloader, device):
         }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/'+args.net+'-ckpt.t7')
+        torch.save(state, './checkpoint/' + args.net + '_' + msg +'_ckpt.t7')
 
         best_acc = acc
     return acc, best_acc
@@ -174,7 +176,7 @@ def build_model_from_name(name, num_classes):
     return net
 
 
-def run_train(net, args, trainloader, testloader, worker_num, device):
+def run_train(net, args, trainloader, testloader, worker_num, device, msg):
     
     list_loss = []
     strtime = get_time()
@@ -183,7 +185,7 @@ def run_train(net, args, trainloader, testloader, worker_num, device):
 
     for epoch in range(start_epoch, start_epoch + args.epoch):
         trainloss = train(epoch, net, criterion_edge, optimizer_edge, trainloader, device)
-        acc, best_acc = test(epoch, net, criterion_edge, testloader, device)
+        acc, best_acc = test(epoch, net, criterion_edge, testloader, device, msg)
         logger.debug(f"The result is: {acc}")
         # write_csv('acc_' + args.workspace + '_worker_' + str(worker_num) + '_' + strtime + '.csv', str(acc))
         write_csv('results/' + args.workspace, 'acc_'  + 'worker_' + str(worker_num) + '_' + strtime + '.csv', str(acc))
@@ -699,9 +701,9 @@ def run_concat_distill_multi(
                                                     cloud, 
                                                     optimizer, 
                                                     trainloader_concat, 
-                                                    device, average_method='weighted', selection=False, lambda_=1)
+                                                    device, average_method='weighted', selection=args.selection, lambda_=args.lamb)
         
-        acc, best_acc = test(epoch, cloud, criterion_cloud, testloader_30cls, device)
+        acc, best_acc = test(epoch, cloud, criterion_cloud, testloader_30cls, device, 'cloud')
 
         logger.debug(f"The result is: {acc}")
         write_csv('results/' + args.workspace, 'distill_concat_' + strtime + '.csv', str(acc))
@@ -777,7 +779,7 @@ if __name__ == "__main__":
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     start_epoch = 0  # start from epoch 0 or last checkpoint epoch
     torch.manual_seed(0)
-    print(args)
+    # print(args)
 
     root = 'results/' + args.workspace
     check_dir(root)
@@ -785,6 +787,7 @@ if __name__ == "__main__":
     logger.addHandler(c_handler)
     logger.addHandler(f_handler)
 
+    logger.info(args)
     # Data
     logger.debug('==> Preparing data..')
     num_classes = 10 if args.dataset == 'cifar10' else 100
@@ -920,10 +923,11 @@ if __name__ == "__main__":
         
     if args.iid:
         logger.debug("Running iid test")
-        run_train(net, args, trainloaders[0], testloader_30cls, 0, device)
+        run_train(net, args, trainloaders[0], testloader_30cls, 0, device, 'edge_0')
     else:
         # Train the first edge model
-        run_train(net, args, trainloader, testloader, 0, device)
+        run_train(net, args, trainloader, testloader, 0, device, 'edge_0')
+
 
     logger.debug(30*'*' + 'Before Distilling from worker 0' + 30*'*')
     
@@ -947,8 +951,9 @@ if __name__ == "__main__":
 
     if args.two:
 
-        run_train(net_1, args, trainloader_1, testloader_1, 1, device)
-        run_train(net_2, args, trainloader_2, testloader_2, 2, device)
+        run_train(net_1, args, trainloader_1, testloader_1, 1, device, 'edge_1')
+        run_train(net_2, args, trainloader_2, testloader_2, 2, device, 'edge_2')
+        print("done collecting checkpoints ##############################")
 
         logger.debug(30*'*' + 'Cloud param' + 30*'*')
         print_param(cloud_net)
@@ -975,8 +980,11 @@ if __name__ == "__main__":
             # with 3 workers alternating
             # run_alternate_distill_multi(net, net_1, net_2, cloud_net, args, trainloader, trainloader_1, trainloader_2, testloader_30cls, worker_num=0, device=device)
 
-            # concat dataset
-            run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls, testloader_30cls, worker_num=0, device=device)
-
             # use public to distill
-            # run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls_public, testloader_30cls, worker_num=0, device=device)
+            # need to add --public_distill flag
+            if args.public_distill:
+                run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls_public, testloader_30cls, worker_num=0, device=device)
+            
+            else:
+                # concat dataset private
+                run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls, testloader_30cls, worker_num=0, device=device)
