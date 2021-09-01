@@ -56,6 +56,7 @@ def parse_arguments():
     parser.add_argument('--alpha', default=100, type=float, help='alpha for iid setting')
     parser.add_argument('--lamb', default=0.5, type=float, help='lambda for distillation')
     parser.add_argument('--selection', action='store_true', help="enable selection method")
+    parser.add_argument('--use_pseudo_labels', action='store_true', help="enable selection method")
 
     args = parser.parse_args()
 
@@ -124,6 +125,7 @@ def test(epoch, net, criterion, testloader, device, msg):
             #     % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
     # Save checkpoint.
+    #TODO: why not save checkpoint every experiment? 
     acc = 100.*correct/total
     if acc > best_acc:
         logger.debug('Saving..')
@@ -134,7 +136,9 @@ def test(epoch, net, criterion, testloader, device, msg):
         }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/' + args.net + '_' + msg +'_ckpt.t7')
+        # torch.save(state, './checkpoint/' + args.net + '_' + msg +'_ckpt.t7')
+        torch.save(state, './checkpoint/' + msg +'_ckpt.t7')
+
 
         best_acc = acc
     return acc, best_acc
@@ -465,6 +469,7 @@ def distill_from_concat_multi_workers(
     device,
     average_method,
     selection=False,
+    use_pseudo_labels=False,
     lambda_=0.5,
     )->float:
     """ 
@@ -527,6 +532,10 @@ def distill_from_concat_multi_workers(
             assert out_t.shape[1] == 100, f"the shape is {out_t.shape}, should be (x, 100)"
             t_max = F.softmax(out_t / T, dim=1)
 
+            if use_pseudo_labels:
+                _, pseudo_labels = out_t.max(1)
+
+
         #TODO: use an array of edge models instead later
         # you can use torch.zeros(128,100) to create the placeholder 
         else:
@@ -545,10 +554,19 @@ def distill_from_concat_multi_workers(
                 logger.debug(f"Weighted average")
                 t_max = alpha * t_max_0 + beta * t_max_1 + gamma * t_max_2
 
+        # logger.debug(f"s_max: {s_max}")    
+        # logger.debug(f"t_max: {t_max}")
+
         loss_kd = kd_fun(s_max, t_max) / batch_size
         loss = loss_fun(out_s, targets)
+        
+        if use_pseudo_labels:
+            logger.debug(f"Enable pseudo labels")
+            loss_sd = loss_fun(out_s, pseudo_labels)
+            loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd + 0.5 * loss_sd
 
-        loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
+        else:
+            loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
 
         loss_kd.backward()
         optimizer.step()
@@ -694,6 +712,7 @@ def run_concat_distill_multi(
         
         # trainloss = distill_from_multi_workers(epoch, frozen_edge_0, frozen_edge_1, frozen_edge_2, cloud, optimizer, trainloader_0, trainloader_1, trainloader_2, device)
         # TODO: need to change the distill from multi workers to support array of trainloaders and workers. Now it is a hacky method 
+        # TODO: merge selection into average method
         trainloss = distill_from_concat_multi_workers(epoch, 
                                                     frozen_edge_0, 
                                                     frozen_edge_1, 
@@ -701,7 +720,10 @@ def run_concat_distill_multi(
                                                     cloud, 
                                                     optimizer, 
                                                     trainloader_concat, 
-                                                    device, average_method='weighted', selection=args.selection, lambda_=args.lamb)
+                                                    device, average_method='weighted', 
+                                                    selection=args.selection, 
+                                                    use_pseudo_labels=args.use_pseudo_labels, 
+                                                    lambda_=args.lamb)
         
         acc, best_acc = test(epoch, cloud, criterion_cloud, testloader_30cls, device, 'cloud')
 
@@ -762,7 +784,7 @@ def test_only(
     
     strtime = get_time()
     criterion = nn.CrossEntropyLoss()
-    acc, best_acc = test(0, net, criterion, testloader, device)
+    acc, best_acc = test(0, net, criterion, testloader, device, 'test')
     logger.debug(f"The result is: {acc}")
     # write_csv('acc_' + args.workspace +  '_test_other_ten' + strtime + '.csv', str(acc))
     write_csv('results/' + args.workspace, 'acc_' +  'test_other_ten' + strtime + '.csv', str(acc))
@@ -918,15 +940,16 @@ if __name__ == "__main__":
     cloud_net = build_model_from_name(args.cloud, num_classes)
     # cloud_net = build_model_from_name('res50', num_classes)
 
-    if args.resume:
-        load_checkpoint()
-        
+
     if args.iid:
         logger.debug("Running iid test")
         run_train(net, args, trainloaders[0], testloader_30cls, 0, device, 'edge_0')
     else:
         # Train the first edge model
-        run_train(net, args, trainloader, testloader, 0, device, 'edge_0')
+        if args.resume:
+            net = load_edge_checkpoint(net, 'res8_edge_0_ckpt.t7')
+        else:
+            run_train(net, args, trainloader, testloader, 0, device, 'edge_0')
 
 
     logger.debug(30*'*' + 'Before Distilling from worker 0' + 30*'*')
@@ -951,9 +974,14 @@ if __name__ == "__main__":
 
     if args.two:
 
-        run_train(net_1, args, trainloader_1, testloader_1, 1, device, 'edge_1')
-        run_train(net_2, args, trainloader_2, testloader_2, 2, device, 'edge_2')
-        print("done collecting checkpoints ##############################")
+        if args.resume:
+            net_1 = load_edge_checkpoint(net_1, 'res8_edge_1_ckpt.t7')
+            net_2 = load_edge_checkpoint(net_2, 'res8_edge_2_ckpt.t7')
+
+        else:
+            run_train(net_1, args, trainloader_1, testloader_1, 1, device, 'edge_1')
+            run_train(net_2, args, trainloader_2, testloader_2, 2, device, 'edge_2')
+        
 
         logger.debug(30*'*' + 'Cloud param' + 30*'*')
         print_param(cloud_net)
@@ -971,12 +999,6 @@ if __name__ == "__main__":
             test_only(cloud_net, testloader, device)
         else:
             
-            # Continual two classes
-            # run_alternate_distill(net, net_1, cloud_net, args, trainloader, trainloader_1, testloader_20cls, worker_num=0, device=device)
-            
-            # test with the other two classes (the cloud is having trouble again)
-            # run_alternate_distill(net, net_2, cloud_net, args, trainloader, trainloader_2, testloader_20cls, worker_num=0, device=device)
-
             # with 3 workers alternating
             # run_alternate_distill_multi(net, net_1, net_2, cloud_net, args, trainloader, trainloader_1, trainloader_2, testloader_30cls, worker_num=0, device=device)
 

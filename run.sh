@@ -40,11 +40,53 @@
 #                 --exist_loader \
 #                 --alternate
 
-
 # adam private data (selection method)
 # split=0.1
+# CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
+#                 --workspace selection_private_data_3_workers_res18_adam_lambda_1_from_edge_ckpts \
+#                 --net res8 \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --dataset cifar100 \
+#                 --epoch 200 \
+#                 --cloud_epoch 1000 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --two \
+#                 --lamb 1 \
+#                 --exist_loader \
+#                 --selection \
+#                 --resume \
+#                 --alternate
+
+# adam private data (selection method, pseudo labels)
+# split=0.1
+# CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+#                 --workspace test_pl \
+#                 --net res8 \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --dataset cifar100 \
+#                 --epoch 1 \
+#                 --cloud_epoch 200 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --two \
+#                 --lamb 1 \
+#                 --exist_loader \
+#                 --selection \
+#                 --resume \
+#                 --use_pseudo_labels \
+#                 --alternate
+
+# adam public data (selection method)
+# split=0.1
 # CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
-#                 --workspace selection_private_data_3_workers_res18_adam_lambda_1 \
+#                 --workspace selection_public_data_3_workers_res18_adam_lambda_1 \
 #                 --net res8 \
 #                 --cloud res18 \
 #                 --split $split \
@@ -57,29 +99,9 @@
 #                 --lr 0.1 \
 #                 --two \
 #                 --lamb 1 \
-#                 --exist_loader \
 #                 --selection \
+#                 --public_distill \
 #                 --alternate
-
-# adam public data (selection method)
-split=0.1
-CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
-                --workspace selection_public_data_3_workers_res18_adam_lambda_1 \
-                --net res8 \
-                --cloud res18 \
-                --split $split \
-                --split_classes \
-                --dataset cifar100 \
-                --epoch 200 \
-                --cloud_epoch 200 \
-                --optimizer adam \
-                --cloud_lr 0.001 \
-                --lr 0.1 \
-                --two \
-                --lamb 1 \
-                --selection \
-                --public_distill \
-                --alternate
 
 # adam public data
 # split=0.1
@@ -100,11 +122,10 @@ CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
 #                 --public_distill \
 #                 --alternate
 
-
 # DEBUG
 # split=0.1
-# CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
-#                 --workspace collect_edge_checkpoints \
+# CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+#                 --workspace debug_load_ckpts \
 #                 --net res8 \
 #                 --cloud res18 \
 #                 --split $split \
@@ -118,6 +139,8 @@ CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
 #                 --two \
 #                 --lamb 1 \
 #                 --exist_loader \
+#                 --resume \
+#                 --selection \
 #                 --alternate
 
 
@@ -139,16 +162,16 @@ CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
 
 # Baseline template
 # Also need to turn off the flags for exist loader and save loader
-# split=0.1
-# CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
-#                 --workspace test_baseline \
-#                 --net res20 \
-#                 --split $split \
-#                 --split_classes \
-#                 --dataset cifar100 \
-#                 --epoch 1 \
-#                 --baseline \
-#                 --lr 0.1
+split=0.05
+CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
+                --workspace baseline_5_cls \
+                --net res8 \
+                --split $split \
+                --split_classes \
+                --dataset cifar100 \
+                --epoch 200 \
+                --baseline \
+                --lr 0.1
                 # --two \
                 # --alternate \
 

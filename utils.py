@@ -146,6 +146,33 @@ def load_checkpoint(net):
 
     return net
 
+
+def load_edge_checkpoint(net, checkpoint):
+
+    print('==> Resuming from checkpoint..')
+    assert os.path.isdir('edge_checkpoint'), 'Error: no checkpoint directory found!'
+    checkpoint = torch.load('./edge_checkpoint/' + checkpoint)
+    net.load_state_dict(checkpoint['net'])
+    best_acc = checkpoint['acc']
+    start_epoch = checkpoint['epoch']
+
+    return net
+
+
+def load_edge_checkpoint_fullpath(net, checkpoint):
+
+    print('==> Resuming from checkpoint..')
+    assert os.path.isdir('edge_checkpoint'), 'Error: no checkpoint directory found!'
+    checkpoint = torch.load(checkpoint)
+    net.load_state_dict(checkpoint['net'])
+    best_acc = checkpoint['acc']
+    start_epoch = checkpoint['epoch']
+
+    return net
+
+
+
+
 def print_total_params(net):
     total_params = sum(p.numel() for p in net.parameters())
     layers = len(list(net.modules()))
