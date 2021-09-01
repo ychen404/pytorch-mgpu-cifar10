@@ -97,9 +97,10 @@ def train(epoch, net, criterion, optimizer, trainloader, device):
     return train_loss/(batch_idx+1)
 
 
-def test(epoch, net, criterion, testloader, device, msg):
+def test(epoch, args, net, criterion, testloader, device, msg, save_checkpoint=True):
 
-    best_acc = 0
+    # best_acc = 0
+    global best_acc
     net.eval()
     test_loss = 0
     correct = 0
@@ -126,21 +127,24 @@ def test(epoch, net, criterion, testloader, device, msg):
 
     # Save checkpoint.
     #TODO: why not save checkpoint every experiment? 
+    
     acc = 100.*correct/total
+    logger.debug(f"acc: {acc}, best_acc: {best_acc}")
+
     if acc > best_acc:
-        logger.debug('Saving..')
         state = {
             'net': net.state_dict(),
             'acc': acc,
             'epoch': epoch,
         }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-        # torch.save(state, './checkpoint/' + args.net + '_' + msg +'_ckpt.t7')
-        torch.save(state, './checkpoint/' + msg +'_ckpt.t7')
-
-
+        if save_checkpoint:
+            logger.debug('Saving..')
+            checkpoint_dir = 'results/' + args.workspace + '/checkpoint/'
+            if not os.path.isdir(checkpoint_dir):
+                os.mkdir(checkpoint_dir)
+            torch.save(state, checkpoint_dir + msg +'_ckpt.t7')
         best_acc = acc
+            
     return acc, best_acc
         
 
@@ -189,7 +193,7 @@ def run_train(net, args, trainloader, testloader, worker_num, device, msg):
 
     for epoch in range(start_epoch, start_epoch + args.epoch):
         trainloss = train(epoch, net, criterion_edge, optimizer_edge, trainloader, device)
-        acc, best_acc = test(epoch, net, criterion_edge, testloader, device, msg)
+        acc, best_acc = test(epoch, args, net, criterion_edge, testloader, device, msg)
         logger.debug(f"The result is: {acc}")
         # write_csv('acc_' + args.workspace + '_worker_' + str(worker_num) + '_' + strtime + '.csv', str(acc))
         write_csv('results/' + args.workspace, 'acc_'  + 'worker_' + str(worker_num) + '_' + strtime + '.csv', str(acc))
@@ -800,6 +804,7 @@ if __name__ == "__main__":
     args = parse_arguments()
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     start_epoch = 0  # start from epoch 0 or last checkpoint epoch
+    best_acc = 0
     torch.manual_seed(0)
     # print(args)
 

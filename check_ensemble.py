@@ -23,6 +23,17 @@ import itertools
 import pdb
 from train_cifar import test
 
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
+    parser.add_argument('--workspace', default='')
+    args = parser.parse_args()
+    
+    return args
+
+
+
 def build_model_from_name(name, num_classes):
 
     print(name, type(name))
@@ -51,6 +62,7 @@ def build_model_from_name(name, num_classes):
 
 def test_only(
     net, 
+    args,
     testloader,
     device
     )->None:
@@ -58,11 +70,9 @@ def test_only(
     
     strtime = get_time()
     criterion = nn.CrossEntropyLoss()
-    acc, best_acc = test(0, net, criterion, testloader, device, 'test')
+    
+    acc, best_acc = test(0, args, net, criterion, testloader, device, 'test', save_checkpoint=False)
     logger.debug(f"The accuracy is: {acc}")
-    # write_csv('acc_' + args.workspace +  '_test_other_ten' + strtime + '.csv', str(acc))
-    # write_csv('results/' + args.workspace, 'acc_' +  'test_other_ten' + strtime + '.csv', str(acc))
-    # logger.debug("===> BEST ACCURACY: %.2f%%" % (best_acc))
 
 
 def check_ensemble_accuracy(edge_net_0, edge_net_1, edge_net_2, testloader, device, average=False):
@@ -246,7 +256,6 @@ def check_dir(directory):
         os.makedirs(directory)    
 
 
-
 if __name__ == "__main__":
 
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -256,6 +265,7 @@ if __name__ == "__main__":
 
     model = 'res8'
     num_classes = 100
+    args = parse_arguments()
 
     net = build_model_from_name(model, num_classes)
     net_1 = build_model_from_name(model, num_classes)
@@ -263,8 +273,8 @@ if __name__ == "__main__":
     cloud_net = build_model_from_name('res18', num_classes)
     criterion_cloud = nn.CrossEntropyLoss()
 
+
     net = load_edge_checkpoint(net, 'res8_edge_0_ckpt.t7')
-    # net_1 = load_edge_checkpoint(net_1, 'res8_edge_1_ckpt.t7')
     net_1 = load_edge_checkpoint_fullpath(net_1, 'edge_checkpoint/res8_edge_1_ckpt.t7')
     net_2 = load_edge_checkpoint(net_2, 'res8_edge_2_ckpt.t7')
 
@@ -274,6 +284,14 @@ if __name__ == "__main__":
     testloader_20cls = torch.load('testloader_20cls.pth')
     testloader_30cls = torch.load('testloader_30cls.pth')
     trainloader_30cls = torch.load('trainloader_30cls.pth')
+
+
+    trainset = get_cifar100()
+    _, testloader_5cls = get_worker_data_hardcode(trainset, 0.05, workerid=0)
+    net = load_edge_checkpoint_fullpath(net, 'results/baseline_5_cls/checkpoint/edge_0_ckpt.t7')
+    test_only(net, args, testloader_5cls, 'cuda')
+
+    exit()
 
     test_only(net, testloader, 'cuda')
     test_only(net_1, testloader_1, 'cuda')

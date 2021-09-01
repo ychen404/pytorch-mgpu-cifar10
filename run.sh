@@ -164,7 +164,7 @@
 # Also need to turn off the flags for exist loader and save loader
 split=0.05
 CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
-                --workspace baseline_5_cls \
+                --workspace baseline_5_cls_best_acc \
                 --net res8 \
                 --split $split \
                 --split_classes \
