@@ -18,7 +18,6 @@ def parse_arguments():
     # Arguments
     parser.add_argument("--dir", default="acc.csv", type=str)
     
-
     args = parser.parse_args()
 
     return args
@@ -27,8 +26,10 @@ def parse_arguments():
 def collect_data(path):
     
     acc = []
-    data = genfromtxt(path, delimiter=',', skip_header=1)
-    length = len(data)
+    # data = genfromtxt(path, delimiter=',', skip_header=1)
+    data = genfromtxt(path, delimiter=',')
+
+    # length = len(data)
 
     for element in data:
         # add the results of all iterations
@@ -50,7 +51,6 @@ def plot(y_axis, xlabel=None, ylabel=None, title=None, output='result.png'):
     key = list(y_axis.keys())[0]
     # get the length of the key
     length = (len(y_axis[key]))
-
     x_axis = np.arange(1, length+1, 1)
     print(x_axis)
 
@@ -82,7 +82,13 @@ def plot(y_axis, xlabel=None, ylabel=None, title=None, output='result.png'):
 
     # ax.grid()
     plt.tight_layout()
+    
+    
+    
     # plt.subplots_adjust(right=0.65)
+
+
+
     fig.savefig(output)
 
 if __name__ == "__main__":
@@ -106,6 +112,7 @@ if __name__ == "__main__":
     edge_1_data = 'results/alternate_data_3_workers_res18/acc_worker_1_2021-08-11-16-56.csv'
     edge_2_data = 'results/alternate_data_3_workers_res18/acc_worker_2_2021-08-11-16-59.csv'
     cloud_data_res18_lambda_0_baseline = 'results/baseline_only_true_label_concat_data_3_workers_res18_adam_lambda_0/distill_concat_2021-08-27-05-12.csv'
+    cloud_data_res18_lambda_0_10cls = 'results/baseline_10_cls_res18/acc_worker_0_2021-09-07-16-28.csv'
 
     # 8/24
     cloud_data_lambda_0_5_average = 'results/concat_data_3_workers_average_softmax_lambda_0.5/distill_concat_2021-08-24-00-07.csv'
@@ -128,6 +135,19 @@ if __name__ == "__main__":
     # 8/27
     selection_private_data_lambda_1 = 'results/selection_private_data_3_workers_res18_adam_lambda_1/distill_concat_2021-08-27-05-13.csv'
 
+    # 9/3
+    selection_public_data_0_2_5_cls_two_edge_adam_lambda_1 = 'results/selection_public_data_0.2_5_cls_two_edge_adam_lambda_1/distill_concat_2021-09-03-07-49.csv'
+    selection_public_data_0_5_5_cls_two_edge_adam_lambda_1 = 'results/selection_public_data_0.5_5_cls_two_edge_adam_lambda_1/distill_concat_2021-09-03-08-01.csv'
+    selection_private_data_5_cls_two_edge_adam_lambda_1 = 'results/selection_private_data_5_cls_two_edge_adam_lambda_1/distill_concat_2021-09-01-21-05.csv'
+    selection_private_data_5_cls_two_edge_adam_lambda_1_edge0 = 'results/selection_private_data_5_cls_two_edge_adam_lambda_1/acc_worker_0_2021-09-01-20-59.csv'
+    selection_private_data_5_cls_two_edge_adam_lambda_1_edge1 = 'results/selection_private_data_5_cls_two_edge_adam_lambda_1/acc_worker_1_2021-09-01-21-02.csv'
+    selection_private_data_5_cls_single_edge_adam_lambda_1_edge = 'results/selection_private_data_5_cls_single_edge_adam_lambda_1/acc_worker_0_2021-09-01-19-55.csv'
+    selection_private_data_5_cls_single_edge_adam_lambda_1_cloud = 'results/selection_private_data_5_cls_single_edge_adam_lambda_1/distill_worker_0_2021-09-01-19-58.csv'
+
+    # 9/6/
+    selection_edge_public_distill_public_0_2_5_cls_two_edge_adam_lambda_1 = 'results/selection_edge_public_distill_public_0.2_5_cls_two_edge_adam_lambda_1/distill_concat_2021-09-05-18-16.csv'
+    selection_edge_public_distill_public_0_5_5_cls_two_edge_adam_lambda_1 = 'results/selection_edge_public_distill_public_0.5_5_cls_two_edge_adam_lambda_1/distill_concat_2021-09-05-18-16.csv'
+    selection_edge_public_finetune_distill_public_0_5_5_cls_two_edge_adam_lambda_1 = 'results/selection_edge_public_finetune_distill_public_0.5_5_cls_two_edge_adam_lambda_1/distill_concat_2021-09-07-17-24.csv'
     # data_to_plot['Cloud baseline'] = collect_data(cloud_data_base_30cls)
     # data_to_plot['Dependent cloud'] = collect_data(dependent_cloud)
     # data_to_plot['Dependent cloud Res20'] = collect_data(dependent_cloud_res20)
@@ -140,19 +160,16 @@ if __name__ == "__main__":
     # data_to_plot['lambda=0.5'] = collect_data(cloud_data_res18_labmda_05)
     # data_to_plot['lambda=0.2'] = collect_data(cloud_data_res18_lambda_02)
 
-    data_to_plot['Only True label (lambda=0 baseline)'] = collect_data(cloud_data_res18_lambda_0_baseline)
+    ##### cloud baseline ####
+    # data_to_plot['Only True label (lambda=0 baseline)'] = collect_data(cloud_data_res18_lambda_0_baseline)
 
-
-    data_to_plot['Private data lambda=0.5'] = collect_data(cloud_data_lambda_0_5_weighted)
-    # data_to_plot['lambda=0.5 average'] = collect_data(cloud_data_lambda_0_5_average)
-    data_to_plot['Public data lambda=0.5'] = collect_data(cloud_public_distill_lambda_0_5)
-        
-    data_to_plot['Public data lambda=1'] = collect_data(public_data_distill_lambda_1)
-    data_to_plot['Private data lambda=1'] = collect_data(concat_data_lambda_1)
-    # data_to_plot['Public data lambda=0'] = collect_data(public_data_lambda_0)
-
-    data_to_plot['Edge baseline'] = collect_data(edge_data_base_30cls)
-    data_to_plot['Private data lambda=1 (selection)'] = collect_data(selection_private_data_lambda_1)
+    #### other ####
+    # data_to_plot['Private data lambda=0.5'] = collect_data(cloud_data_lambda_0_5_weighted)
+    # data_to_plot['Public data lambda=0.5'] = collect_data(cloud_public_distill_lambda_0_5)
+    # data_to_plot['Public data lambda=1'] = collect_data(public_data_distill_lambda_1)
+    # data_to_plot['Private data lambda=1'] = collect_data(concat_data_lambda_1)
+    # data_to_plot['Edge baseline'] = collect_data(edge_data_base_30cls)
+    # data_to_plot['Private data lambda=1 (selection)'] = collect_data(selection_private_data_lambda_1)
 
     # data_to_plot['Private data lambda=0.5 (selection)'] = collect_data(data_selection_distill_3_workers_lambda_0_5)
 
@@ -160,9 +177,28 @@ if __name__ == "__main__":
 
     # data_to_plot['IID cloud baseline'] = collect_data(iid_cloud_baseline)
     # data_to_plot['IID edge baseline'] = collect_data(iid_edge_baseline)
+    
+    # data_to_plot['cloud_data_res18_10cls'] = collect_data(cloud_data_res18_lambda_0_10cls)
 
+    #### five classes results ####
+    # data_to_plot['20% Public data lambda=1'] = collect_data(selection_public_data_0_2_5_cls_two_edge_adam_lambda_1)
+    # data_to_plot['50% Public data lambda=1'] = collect_data(selection_public_data_0_5_5_cls_two_edge_adam_lambda_1)
+    
+    # data_to_plot['Edge'] = collect_data(selection_private_data_5_cls_single_edge_adam_lambda_1_edge)
+    # data_to_plot['Cloud'] = collect_data(selection_private_data_5_cls_single_edge_adam_lambda_1_cloud)
 
-    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes', output='acc_30cls_add_selection_lamb_1.png')
+    data_to_plot['Private data lambda=1'] = collect_data(selection_private_data_5_cls_two_edge_adam_lambda_1)
+
+    data_to_plot['20% Public data lambda=1 retrain'] = collect_data(selection_edge_public_distill_public_0_2_5_cls_two_edge_adam_lambda_1)
+    data_to_plot['50% Public data lambda=1 retrain'] = collect_data(selection_edge_public_distill_public_0_5_5_cls_two_edge_adam_lambda_1)
+
+    data_to_plot['20% Public data lambda=1'] = collect_data(selection_public_data_0_2_5_cls_two_edge_adam_lambda_1)
+    data_to_plot['50% Public data lambda=1'] = collect_data(selection_public_data_0_5_5_cls_two_edge_adam_lambda_1)
+    
+    data_to_plot['50% Public data finetune lambda=1'] = collect_data(selection_edge_public_finetune_distill_public_0_5_5_cls_two_edge_adam_lambda_1)
+    # data_to_plot['Edge 0'] = collect_data(selection_private_data_5_cls_two_edge_adam_lambda_1_edge0)
+    # data_to_plot['Edge 1'] = collect_data(selection_private_data_5_cls_two_edge_adam_lambda_1_edge1)
+
+    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy', output='acc_public_finetune_10cls_selection.png')
     # plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes', output='acc_30cls_distill_weighted_0826.png')
-
     # plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy of 30 classes (IID)', output='acc_30cls_iid_new.png')

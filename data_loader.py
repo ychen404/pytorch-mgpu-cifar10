@@ -6,6 +6,7 @@ import numpy as np
 from torch.utils.data import Dataset
 from torch.utils.data.sampler import SubsetRandomSampler
 import logging
+import pdb
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
@@ -160,7 +161,6 @@ def get_loader(train_data, args):
                                                 pin_memory=True)
     return train_loader
 
-
 def extract_targets(train_data):
   
   targets = []
@@ -231,14 +231,15 @@ def get_dirichlet_loaders(train_data, n_clients=3, alpha=0, batch_size=128, n_da
 
     # Check if it is train_data object
     if not isinstance(train_data, torchvision.datasets.cifar.CIFAR100):
-        train_data_targets = extract_targets(train_data) 
+        train_data_targets = extract_targets(train_data)
+        print(f"train_data_targets: {train_data_targets}")
 
     else:
         train_data_targets = train_data.targets    
     
     subset_idcs = split_dirichlet(train_data_targets, n_clients, n_data, alpha, seed=seed)
+    print(f"subset_idcs: {subset_idcs}")
     client_data = [torch.utils.data.Subset(train_data, subset_idcs[i]) for i in range(n_clients)]
-
 
     client_loaders = [torch.utils.data.DataLoader(subset, 
                                                     batch_size=batch_size, 
