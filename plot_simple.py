@@ -72,13 +72,31 @@ def plot(y_axis, xlabel=None, ylabel=None, title=None, output='result.png'):
 if __name__ == "__main__":
     
     data_to_plot = {}
-    public_portion = 'results/train_private_test_public_pub_percent_0.5_2_cls_adam_lambda_1/public_data.csv'
-    private_portion = 'results/train_private_test_public_pub_percent_0.5_2_cls_adam_lambda_1/private_data.csv'
-    test_portion = 'results/train_private_test_public_pub_percent_0.5_2_cls_adam_lambda_1/test_data.csv'
+    cloud = 'results/public_percent_0.5_2_cls_adam_lambda_1/distill_concat_2021-09-14-17-46.csv'
+    edge_0 = 'results/public_percent_0.5_2_cls_adam_lambda_1/acc_worker_0_2021-09-14-17-42.csv'
+    edge_1 = 'results/public_percent_0.5_2_cls_adam_lambda_1/acc_worker_1_2021-09-14-17-44.csv'
+    edge_0_full = 'results/full_data_2_cls_adam_lambda_1/acc_worker_0_2021-09-14-19-12.csv'
+    edge_1_full = 'results/full_data_2_cls_adam_lambda_1/acc_worker_1_2021-09-14-19-14.csv'
+    cloud_private = 'results/public_percent_0.5_2_cls_adam_lambda_1_private_distill/distill_concat_2021-09-14-18-37.csv'
+    cloud_full = 'results/full_data_2_cls_adam_lambda_1/distill_concat_2021-09-14-19-17.csv'
+
+    edge_0_iid = 'results/public_percent_0.5_4_cls_adam_lambda_1_iid_public_distill_again/acc_worker_0_2021-09-15-15-48.csv'
+    edge_1_iid = 'results/public_percent_0.5_4_cls_adam_lambda_1_iid_public_distill_again/acc_worker_1_2021-09-15-15-50.csv'
+    cloud_iid = 'results/public_percent_0.5_4_cls_adam_lambda_1_iid_public_distill_again/distill_concat_2021-09-15-15-51.csv'
+
+    # data_to_plot['Cloud Public'] = collect_data(cloud)
+    # data_to_plot['Cloud Private'] = collect_data(cloud_private)
+    # data_to_plot['Cloud 100% data'] = collect_data(cloud_full)
+    
+    data_to_plot['Cloud'] = collect_data(cloud_iid)
+    data_to_plot['Edge 0'] = collect_data(edge_0_iid)
+    data_to_plot['Edge 1'] = collect_data(edge_1_iid)
+
+    # data_to_plot['Edge 0 50% data'] = collect_data(edge_0)
+    # data_to_plot['Edge 1 50% data'] = collect_data(edge_1)
+    # data_to_plot['Edge 0 100% data'] = collect_data(edge_0_full)
+    # data_to_plot['Edge 1 100% data'] = collect_data(edge_1_full)
 
 
-    data_to_plot['Public data'] = collect_data(public_portion)
-    data_to_plot['Private data'] = collect_data(private_portion)
-    data_to_plot['Test data'] = collect_data(test_portion)
-
-    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy', output='classify_2_cls_public_private_test.png')
+    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Both Edge and Cloud Classifies 4 Classes', output='results/public_percent_0.5_4_cls_adam_lambda_1_iid_public_distill_again/iid.png')
+    # plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Each Edge classifies 2 Classes', output='results/public_percent_0.5_2_cls_adam_lambda_1/edge_full.png')

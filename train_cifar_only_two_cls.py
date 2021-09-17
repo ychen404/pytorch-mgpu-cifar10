@@ -39,7 +39,6 @@ def parse_arguments():
     parser.add_argument('--cloud_epoch', default=200, type=int, help='Number of epochs')
     parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
     parser.add_argument('--net', type=str, default='res8')
-    parser.add_argument('--num_workers', default=2, type=int, help='number of edge workers')
     parser.add_argument('--cloud', type=str, default='res18')
     parser.add_argument('--dataset', type=str, default='cifar10')
     parser.add_argument('--batch_size', type=int, default='128')
@@ -196,7 +195,7 @@ def build_model_from_name(name, num_classes):
     if device == 'cuda':
         net = torch.nn.DataParallel(net) # make parallel
         cudnn.benchmark = True
-
+    
     return net
 
 def save_figure(path, csv_name):
@@ -540,139 +539,66 @@ def distill_from_concat_two_workers(
         
     return train_loss/(batch_idx+1)
 
-
-def distill_from_multi_workers(
-    epoch,  
-    edge_nets, 
-    cloud_net, 
-    optimizer, 
+def run_concat_distill_multi(
+    edge_0, 
+    edge_1, 
+    edge_2,
+    cloud, 
+    args, 
     trainloader_concat, 
-    device,
-    num_workers,
-    split,
-    average_method,
-    selection=False,
-    use_pseudo_labels=False,
-    lambda_=1,
-    )->float:
-    """ 
-    This function is a hack for using 30 classes training data for distillation
-    Here I directly use the trainloader that contains the first 30 classes, so it can only provide a baseline
-    """
+    testloader_30cls,
+    worker_num, 
+    device
+    )->nn.Module:
+    """Concatenate the three datase from the edge workers together and test distillation with lambda set to 0"""
     
-    logger.debug('\nEpoch: %d' % epoch)
-    cloud_net.train()
-    logger.debug(f"model.train={cloud_net.training}")
-    train_loss = 0
-    correct = 0
-    total = 0
-    loss_fun = nn.CrossEntropyLoss()
-    kd_fun = nn.KLDivLoss(reduction='sum')
-    T = 1
+    logger.debug("From concat distill")
+    strtime = get_time()
+    list_loss = []
 
-    # consider cifar100 only for now
-    total_classes = 100
-    # num_workers = 2
-    worker_ids = [x for x in range(num_workers)]
-    num_classes = int(split * total_classes)
-    bounds = []
-    for worker_id in worker_ids:
-        start = worker_id * num_classes + 0
-        end = worker_id * num_classes + num_classes - 1
-        bounds.append([start, end])
+    frozen_edge_0 = freeze_net(edge_0)
+    frozen_edge_0 = frozen_edge_0.to(device)
+    
+    frozen_edge_1 = freeze_net(edge_1)
+    frozen_edge_1 = frozen_edge_1.to(device)
 
-    counter = 0
-    logger.debug(f"Lambda: {lambda_}")
-    for batch_idx, (inputs, targets) in enumerate(trainloader_concat):
-        inputs, targets = inputs.to(device), targets.to(device)
-        logger.debug(f"device = {device}")
-        alpha, beta, gamma = count_targets(targets)
-        optimizer.zero_grad()
-        counter += 1
-        logger.debug(f"Counter: {counter}")
-        out_s = cloud_net(inputs)
+    frozen_edge_2 = freeze_net(edge_2)
+    frozen_edge_2 = frozen_edge_2.to(device)
+    
+    criterion_cloud = nn.CrossEntropyLoss()
 
-        batch_size = out_s.shape[0]
-        s_max = F.log_softmax(out_s / T, dim=1)
+    if args.optimizer == 'sgd':
+        optimizer = optim.SGD(cloud.parameters(), lr=args.cloud_lr, momentum=0.9, weight_decay=5e-4)
+    else:
+        logger.debug("Using adam optimizer")
+        optimizer = optim.Adam(cloud.parameters(), lr=args.cloud_lr, weight_decay=5e-4)
 
-        if selection: # direct the data to edge worker based on classes 
-            out_t_temp = []
-            logger.debug(f"Selection")
-            logger.debug(f"inputs: {inputs.shape}, targets: {targets.shape}")
-            # pdb.set_trace()
-            for input, target in zip(inputs, targets):
-                # need to use unsqueeze to change a 3-dimensional image to 4-dimensional
-                # [3,32,32] -> [1,3,32,32]
-                input = input.unsqueeze(0)
-                
-                # bounds is the list of the lower and upper bound of each worker
-                # e.g., [[0, 1], [2, 3]]
-
-                if bounds[0][0] <= target.item() <= bounds[0][1] :
-                    # logger.debug("first worker data")
-                    out_t_temp.append (edge_net_0(input))
-                elif bounds[1][0] <= target.item() <= bounds[1][1] :
-                    # logger.debug("second worker data")
-                    out_t_temp.append (edge_net_1(input))
-                else:
-                    logger.debug("Should not happen")
-                    exit()
-
-                # out_t_temp.append (edge_net_0(input))
-            logger.debug(f"len out_t_temp: {len(out_t_temp)}")
-            out_t = torch.cat(out_t_temp, dim=0) # use dim 0 to stack the tensors
-            assert out_t.shape[1] == 100, f"the shape is {out_t.shape}, should be (x, 100)"
-            t_max = F.softmax(out_t / T, dim=1)
-
-            if use_pseudo_labels:
-                _, pseudo_labels = out_t.max(1)
-
-        #TODO: use an array of edge models instead later
-        # you can use torch.zeros(128,100) to create the placeholder 
-        else:
-            # out_t_0 = edge_net_0(inputs)
-            # t_max_0 = F.softmax(out_t_0 / T, dim=1)
-
-            # out_t_1 = edge_net_1(inputs)
-            # t_max_1 = F.softmax(out_t_1 / T, dim=1)
-            out_t = torch.zeros((batch_size, total_classes), device=device)
-            t_max = torch.zeros((batch_size, total_classes), device=device)
-
-            for edge_net in edge_nets:
-                edge_net = edge_net.to(device)
-                out_t += edge_net(inputs)
-                t_max += F.softmax(out_t / T, dim=1)
-
-            if average_method == 'equal':
-                logger.debug("For iid case")
-                # t_max = (t_max_0 + t_max_1 ) / 2
-                t_max = t_max / num_workers
-            else: # weighted, performance is not good, not used
-                logger.debug("Not support weighted average now")
-                # logger.debug(f"Weighted average")
-                # t_max = alpha * t_max_0 + beta * t_max_1
-
-        # logger.debug(f"s_max: {s_max}")    
-        # logger.debug(f"t_max: {t_max}")
-
-        loss_kd = kd_fun(s_max, t_max) / batch_size
-        loss = loss_fun(out_s, targets)
+    for epoch in range(args.cloud_epoch):
         
-        if use_pseudo_labels:
-            logger.debug(f"Enable pseudo labels")
-            loss_sd = loss_fun(out_s, pseudo_labels)
-            loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd + 0.5 * loss_sd
-
-        else:
-            loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
-
-        loss_kd.backward()
-        optimizer.step()
-
-        train_loss += loss_kd.item()
+        # trainloss = distill_from_multi_workers(epoch, frozen_edge_0, frozen_edge_1, frozen_edge_2, cloud, optimizer, trainloader_0, trainloader_1, trainloader_2, device)
+        # TODO: need to change the distill from multi workers to support array of trainloaders and workers. Now it is a hacky method 
+        # TODO: merge selection into average method
+        trainloss = distill_from_concat_multi_workers(epoch, 
+                                                    frozen_edge_0, 
+                                                    frozen_edge_1, 
+                                                    frozen_edge_2, 
+                                                    cloud, 
+                                                    optimizer, 
+                                                    trainloader_concat, 
+                                                    device, average_method='weighted', 
+                                                    selection=args.selection, 
+                                                    use_pseudo_labels=args.use_pseudo_labels, 
+                                                    lambda_=args.lamb)
         
-    return train_loss/(batch_idx+1)
+        acc, best_acc = test(epoch, cloud, criterion_cloud, testloader_30cls, device, 'cloud')
 
+        logger.debug(f"The result is: {acc}")
+        write_csv('results/' + args.workspace, 'distill_concat_' + strtime + '.csv', str(acc))
+        list_loss.append(trainloss)
+
+    logger.debug("===> BEST ACC. DISTILLATION: %.2f%%" % (best_acc))
+
+    return cloud
 
 def run_concat_distill_two(
     edge_0, 
@@ -706,6 +632,7 @@ def run_concat_distill_two(
 
     for epoch in range(args.cloud_epoch):
         
+        # trainloss = distill_from_multi_workers(epoch, frozen_edge_0, frozen_edge_1, frozen_edge_2, cloud, optimizer, trainloader_0, trainloader_1, trainloader_2, device)
         # TODO: need to change the distill from multi workers to support array of trainloaders and workers. Now it is a hacky method 
         # TODO: merge selection into average method
         trainloss = distill_from_concat_two_workers(epoch, 
@@ -721,69 +648,6 @@ def run_concat_distill_two(
                                                     use_pseudo_labels=args.use_pseudo_labels, 
                                                     lambda_=args.lamb)
         
-        acc, best_acc = test(epoch, args, cloud, criterion_cloud, testloader_cloud, device, 'cloud')
-
-        logger.debug(f"The result is: {acc}")
-        write_csv('results/' + args.workspace, 'distill_concat_' + strtime + '.csv', str(acc))
-        list_loss.append(trainloss)
-
-    logger.debug("===> BEST ACC. DISTILLATION: %.2f%%" % (best_acc))
-
-    return cloud
-
-
-def run_concat_distill_multi(
-    edge_nets,  
-    cloud, 
-    args, 
-    trainloader_cloud, 
-    testloader_cloud,
-    worker_num, 
-    device
-    )->nn.Module:
-    """Concatenate the three datase from the edge workers together and test distillation with lambda set to 0"""
-    
-    logger.debug("From concat distill")
-    strtime = get_time()
-    list_loss = []
-
-    frozen_edge_nets = []
-    for edge_net in edge_nets:
-        frozen_edge_net = freeze_net(edge_net)
-        frozen_edge_nets.append(frozen_edge_net)
-
-    # pdb.set_trace()
-    # frozen_edge_0 = freeze_net(edge_0)
-    # frozen_edge_0 = frozen_edge_0.to(device)
-    
-    # frozen_edge_1 = freeze_net(edge_1)
-    # frozen_edge_1 = frozen_edge_1.to(device)
-
-    criterion_cloud = nn.CrossEntropyLoss()
-
-    if args.optimizer == 'sgd':
-        optimizer = optim.SGD(cloud.parameters(), lr=args.cloud_lr, momentum=0.9, weight_decay=5e-4)
-    else:
-        logger.debug("Using adam optimizer")
-        optimizer = optim.Adam(cloud.parameters(), lr=args.cloud_lr, weight_decay=5e-4)
-
-    for epoch in range(args.cloud_epoch):
-        
-        # TODO: need to change the distill from multi workers to support array of trainloaders and workers. Now it is a hacky method 
-        # TODO: merge selection into average method
-        trainloss = distill_from_multi_workers(epoch, 
-                                                frozen_edge_nets,
-                                                cloud, 
-                                                optimizer, 
-                                                trainloader_cloud, 
-                                                device, 
-                                                args.num_workers,
-                                                args.split,
-                                                average_method='equal', 
-                                                selection=args.selection, 
-                                                use_pseudo_labels=args.use_pseudo_labels, 
-                                                lambda_=args.lamb)
-
         acc, best_acc = test(epoch, args, cloud, criterion_cloud, testloader_cloud, device, 'cloud')
 
         logger.debug(f"The result is: {acc}")
@@ -856,6 +720,7 @@ def check_dir(directory):
     
 if __name__ == "__main__":
 
+    num_edge_workers = 2
     args = parse_arguments()
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     start_epoch = 0  # start from epoch 0 or last checkpoint epoch
@@ -869,7 +734,6 @@ if __name__ == "__main__":
     logger.addHandler(f_handler)
 
     logger.info(args)
-    
     # Data
     logger.debug('==> Preparing data..')
     num_classes = 10 if args.dataset == 'cifar10' else 100
@@ -913,7 +777,7 @@ if __name__ == "__main__":
                     # print(f"trainset_max: {trainset_max}")
 
                     # use 1 thread worker instead of 4 in the single gpu case
-                    trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
+                    trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=2, alpha=args.alpha, num_workers=1, seed=100)
                     _, testloader_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
 
                 else:
@@ -952,14 +816,14 @@ if __name__ == "__main__":
                         # trainloader_public = get_loader(trainset_public, args)
                         # trainloader_public, _ = get_worker_data_hardcode(trainset_public, 0.1, workerid=0)
                         # the split is hardcoded for testing edge0's performance
-                        trainloader_private, _ = get_worker_data_hardcode(trainset_private, args.num_workers * args.split, workerid=0)
+                        trainloader_private, _ = get_worker_data_hardcode(trainset_private, num_edge_workers * args.split, workerid=0)
                         if args.iid:
                             trainloader_public, testloader_public = get_worker_data_hardcode(trainset_public, args.split, workerid=0)
                         
                         else:
-                            trainloader_public, testloader_public = get_worker_data_hardcode(trainset_public, args.num_workers * args.split, workerid=0)
+                            trainloader_public, testloader_public = get_worker_data_hardcode(trainset_public, num_edge_workers * args.split, workerid=0)
 
-                        trainloader_10cls, testloader_10cls = get_worker_data_hardcode(trainset, args.num_workers * args.split, workerid=0)
+                        trainloader_10cls, testloader_10cls = get_worker_data_hardcode(trainset, num_edge_workers * args.split, workerid=0)
 
                     else:
                         logger.debug("In the else condition")
@@ -972,7 +836,7 @@ if __name__ == "__main__":
                         # _, testloader_20cls_disjoint = get_worker_data_hardcode(trainset, 0.2, workerid=0, disjoint=True)
                         # trainloader_30cls, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
                         # trainloader_10cls, testloader_10cls = get_worker_data_hardcode(trainset, 0.1, workerid=0)
-                        trainloader_cloud, testloader_cloud = get_worker_data_hardcode(trainset, args.num_workers * args.split, workerid=0)
+                        trainloader_cloud, testloader_cloud = get_worker_data_hardcode(trainset, num_edge_workers * args.split, workerid=0)
 
 
                 if args.save_loader:
@@ -1015,7 +879,7 @@ if __name__ == "__main__":
                 # logger.debug(f"max_target: {max_target}, target_dict: {target_dict}")
                         
                 # use 1 thread worker instead of 4 in the single gpu case
-                trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
+                trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=2, alpha=args.alpha, num_workers=1, seed=100)
                 # _, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
                 _, testloader_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
                 # pdb.set_trace()
@@ -1035,13 +899,8 @@ if __name__ == "__main__":
     # Model
     logger.debug('==> Building model..')
 
-    nets = []
-    for i in range(args.num_workers):
-        net = build_model_from_name(args.net, num_classes)
-        nets.append(net)
-
-    # net = build_model_from_name(args.net, num_classes)
-    # net_1 = build_model_from_name(args.net, num_classes)
+    net = build_model_from_name(args.net, num_classes)
+    net_1 = build_model_from_name(args.net, num_classes)
     # net_2 = build_model_from_name(args.net, num_classes)
 
     cloud_net = build_model_from_name(args.cloud, num_classes)
@@ -1049,18 +908,17 @@ if __name__ == "__main__":
 
     if args.iid:
         logger.debug("Running iid test")
-        # run_train(net, args, trainloaders[0], testloader_iid, 0, device, 'edge_0')
-        run_train(nets[0], args, trainloaders[0], testloader_iid, 0, device, 'edge_0')
+        run_train(net, args, trainloaders[0], testloader_iid, 0, device, 'edge_0')
     else:
         # Train the first edge model
         if args.resume:
-            nets[0] = load_edge_checkpoint(nets[0], 'res8_edge_0_ckpt.t7')
+            net = load_edge_checkpoint(net, 'res8_edge_0_ckpt.t7')
         else:
-            run_train(nets[0], args, trainloader, testloader, 0, device, 'edge_0')
+            run_train(net, args, trainloader, testloader, 0, device, 'edge_0')
             # run_train(net, args, trainloader, trainloader, 0, device, 'edge_0')
             # run_train(net, args, trainloader, trainloader_public, 0, device, 'edge_0')
             
-    # logger.debug(30*'*' + 'Before Distilling from worker 0' + 30*'*')
+    logger.debug(30*'*' + 'Before Distilling from worker 0' + 30*'*')
 
     if args.baseline:
         exit()
@@ -1072,39 +930,49 @@ if __name__ == "__main__":
     # print_param(net)
 
     # Distill from the first worker
-    # logger.debug(30*'*' + 'Distilling from worker 0' + 30*'*')
+    logger.debug(30*'*' + 'Distilling from worker 0' + 30*'*')
 
     if not args.alternate: # if not alternate, then perform sequential distillation
         if args.resume:
-            nets[0] = load_edge_checkpoint_fullpath(nets[0], 'results/public_percent_0.5_2_cls_adam_lambda_1/checkpoint/edge_0_ckpt.t7')
-        run_distill(nets[0], cloud_net, args, trainloader, testloader, worker_num=0, device=device)
+            net = load_edge_checkpoint_fullpath(net, 'results/public_percent_0.5_2_cls_adam_lambda_1/checkpoint/edge_0_ckpt.t7')
+        run_distill(net, cloud_net, args, trainloader, testloader, worker_num=0, device=device)
         exit()
 
     if args.two:
         if args.resume:
-            # net_1 = load_edge_checkpoint_fullpath(net_1, 'results/public_percent_0.5_2_cls_adam_lambda_1/checkpoint/edge_1_ckpt.t7')
+            net_1 = load_edge_checkpoint_fullpath(net_1, 'results/public_percent_0.5_2_cls_adam_lambda_1/checkpoint/edge_1_ckpt.t7')
             # net_2 = load_edge_checkpoint(net_2, 'res8_edge_2_ckpt.t7')
-            nets[1] = load_edge_checkpoint_fullpath(nets[1], 'results/public_percent_0.5_2_cls_adam_lambda_1/checkpoint/edge_1_ckpt.t7')
+
         else:
             if args.iid:
-                run_train(nets[1], args, trainloaders[1], testloader_iid, 1, device, 'edge_1')
-
-                for i in range(2, 5, 1):
-                    run_train(nets[i], args, trainloaders[i], testloader_iid, i, device, 'edge_' + str(i))
-
+                run_train(net_1, args, trainloaders[1], testloader_iid, 1, device, 'edge_1')
             else:
-                run_train(nets[1], args, trainloader_1, testloader_1, 1, device, 'edge_1')
+                run_train(net_1, args, trainloader_1, testloader_1, 1, device, 'edge_1')
             
-        logger.debug(30*'*' + 'Done training workers' + 30*'*')
+            # test fine-tune
+            # net_1 = freeze_except_last_layer(net_1)
+            # run_train(net_1, args, trainloader_public, testloader_1, 1, device, 'edge_1_public')
+            # run_train(net_2, args, trainloader_2, testloader_2, 2, device, 'edge_2')
+
+        # logger.debug(30*'*' + 'Cloud param' + 30*'*')
+        # print_param(cloud_net)
+
+        # logger.debug(30*'*' + 'Edge param' + 30*'*')
+        # print_param(net_1)
+
+        logger.debug(30*'*' + 'Distilling from worker 1' + 30*'*')
 
         if not args.alternate:
             # run_distill(net_1, cloud_net, args, trainloader_1, testloader_1, worker_num=1, device=device)
-            run_distill(nets[1], cloud_net, args, trainloader_1, testloader_1, worker_num=1, device=device)
+            run_distill(net_1, cloud_net, args, trainloader_1, testloader_1, worker_num=1, device=device)
             # test the first 10 classes
             logger.debug(30*'*' + 'Testing on the other 10 classes' + 30*'*')
             test_only(cloud_net, testloader, device)
         else:
             
+            # with 3 workers alternating
+            # run_alternate_distill_multi(net, net_1, net_2, cloud_net, args, trainloader, trainloader_1, trainloader_2, testloader_30cls, worker_num=0, device=device)
+
             # use public to distill
             # need to add --public_distill flag
             if args.public_distill:
@@ -1112,18 +980,16 @@ if __name__ == "__main__":
                 # run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls_public, testloader_30cls, worker_num=0, device=device)
                 logger.debug("Distilling with public data")
                 
-                # run_concat_distill_two(nets[0], nets[1], cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device)
-                # Enable multiple edge models
-                run_concat_distill_multi(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device)
+                run_concat_distill_two(net, net_1, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device)
                 # try to use private data to distill
                 # run_concat_distill_two(net, net_1, cloud_net, args, trainloader_private, testloader_public, worker_num=0, device=device)
             else:
                 # if want to use private data to distill change the 'use_full_data' flag to false
                 # concat dataset private
-                # run_concat_distill_two(net[0], nets[1], cloud_net, args, trainloader_cloud, testloader_cloud, worker_num=0, device=device)
-                # Enable multiple edge models
-                run_concat_distill_multi(net[0], nets[1], cloud_net, args, trainloader_cloud, testloader_cloud, worker_num=0, device=device)
-
+                # run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls, testloader_30cls, worker_num=0, device=device)
+                # run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls, testloader_30cls, worker_num=0, device=device)
+                run_concat_distill_two(net, net_1, cloud_net, args, trainloader_cloud, testloader_cloud, worker_num=0, device=device)
+                
     else:
         logger.debug("Done experiment")
         exit()

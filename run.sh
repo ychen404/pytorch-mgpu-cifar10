@@ -81,45 +81,83 @@
 #                 --selection 
 
 # adam private data 5 classes each edge two workers (selection method)
-# split=0.05
+# split=0.02
 # CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
-#                 --workspace selection_cloud_baseline_private_data_10_cls_adam_lambda_0 \
+#                 --workspace full_data_2_cls_adam_lambda_1 \
 #                 --net res8 \
 #                 --cloud res18 \
 #                 --split $split \
 #                 --split_classes \
 #                 --dataset cifar100 \
-#                 --epoch 1 \
+#                 --epoch 200 \
 #                 --cloud_epoch 200 \
 #                 --optimizer adam \
 #                 --cloud_lr 0.001 \
 #                 --lr 0.1 \
-#                 --lamb 0 \
+#                 --lamb 1 \
 #                 --two \
 #                 --alternate \
 #                 --selection 
 
 ########################################
 # adam public data 5 classes each edge two workers (selection method)
-split=0.02
-CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
-                --workspace public_percent_0.5_2_cls_adam_lambda_1 \
+# split=0.02
+# CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
+#                 --workspace public_percent_0.5_2_cls_adam_lambda_1_private_distill \
+#                 --net res8 \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --dataset cifar100 \
+#                 --epoch 200 \
+#                 --cloud_epoch 200 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --two \
+#                 --resume \
+#                 --alternate \
+#                 --public_distill \
+#                 --public_percent 0.5 \
+#                 --selection 
+
+########################################
+# adam public data 2 classes each edge two workers iid (selection method)
+
+#public_percent_0.5_4_cls_adam_lambda_1_iid_public_distill_average
+# split=0.04
+split=0.1
+CUDA_VISIBLE_DEVICES=0 python3 train_cifar.py \
+                --workspace five_workers_iid_ten_cls \
                 --net res8 \
                 --cloud res18 \
                 --split $split \
                 --split_classes \
                 --dataset cifar100 \
+                --num_workers 5 \
                 --epoch 200 \
                 --cloud_epoch 200 \
                 --optimizer adam \
                 --cloud_lr 0.001 \
                 --lr 0.1 \
                 --lamb 1 \
+                --iid \
                 --two \
                 --alternate \
                 --public_distill \
-                --public_percent 0.5 \
-                --selection 
+                --public_percent 0.5
+                # --selection 
+
+
+
+
+
+
+
+
+
+
 
 # adam private data (selection method, pseudo labels)
 # split=0.1
