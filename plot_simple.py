@@ -84,26 +84,67 @@ if __name__ == "__main__":
     edge_1_iid = 'results/public_percent_0.5_4_cls_adam_lambda_1_iid_public_distill_again/acc_worker_1_2021-09-15-15-50.csv'
     cloud_iid = 'results/public_percent_0.5_4_cls_adam_lambda_1_iid_public_distill_again/distill_concat_2021-09-15-15-51.csv'
 
+    # cloud_iid_5_cls = 'results/five_workers_iid/distill_concat_2021-09-17-06-47.csv'
+    # edge_0_5_cls = 'results/five_workers_iid/acc_worker_0_2021-09-17-06-37.csv'
+    # edge_1_5_cls = 'results/five_workers_iid/acc_worker_1_2021-09-17-06-39.csv'
+    # edge_2_5_cls = 'results/five_workers_iid/acc_worker_2_2021-09-17-06-40.csv'
+    # edge_3_5_cls = 'results/five_workers_iid/acc_worker_3_2021-09-17-06-43.csv'
+    # edge_4_5_cls = 'results/five_workers_iid/acc_worker_4_2021-09-17-06-45.csv'
 
-    cloud_iid_5_cls = 'results/five_workers_iid/distill_concat_2021-09-17-06-47.csv'
-    edge_0_5_cls = 'results/five_workers_iid/acc_worker_0_2021-09-17-06-37.csv'
-    edge_1_5_cls = 'results/five_workers_iid/acc_worker_1_2021-09-17-06-39.csv'
-    edge_2_5_cls = 'results/five_workers_iid/acc_worker_2_2021-09-17-06-40.csv'
-    edge_3_5_cls = 'results/five_workers_iid/acc_worker_3_2021-09-17-06-43.csv'
-    edge_4_5_cls = 'results/five_workers_iid/acc_worker_4_2021-09-17-06-45.csv'
+    cloud_iid_5_cls = 'results/five_workers_iid/100iters/distill_concat_2021-09-17-06-47.csv'
+    edge_0_5_cls = 'results/five_workers_iid/100iters/acc_worker_0_2021-09-17-06-37.csv'
+    edge_1_5_cls = 'results/five_workers_iid/100iters/acc_worker_1_2021-09-17-06-39.csv'
+    edge_2_5_cls = 'results/five_workers_iid/100iters/acc_worker_2_2021-09-17-06-40.csv'
+    edge_3_5_cls = 'results/five_workers_iid/100iters/acc_worker_3_2021-09-17-06-43.csv'
+    edge_4_5_cls = 'results/five_workers_iid/100iters/acc_worker_4_2021-09-17-06-45.csv'
 
+
+    # cloud_iid_3_cls = 'results/five_workers_iid_three_cls/distill_concat_2021-09-20-23-52.csv'
+    # edge_0_3_cls = 'results/five_workers_iid_three_cls/acc_worker_0_2021-09-20-23-45.csv'
+    # edge_1_3_cls = 'results/five_workers_iid_three_cls/acc_worker_1_2021-09-20-23-46.csv'
+    # edge_2_3_cls = 'results/five_workers_iid_three_cls/acc_worker_2_2021-09-20-23-48.csv'
+    # edge_3_3_cls = 'results/five_workers_iid_three_cls/acc_worker_3_2021-09-20-23-49.csv'
+    # edge_4_3_cls = 'results/five_workers_iid_three_cls/acc_worker_4_2021-09-20-23-51.csv'
+
+
+
+    # six workers
+
+    cloud_iid_3_cls = 'results/six_workers_iid_three_cls/distill_concat_2021-09-21-00-08.csv'
+    edge_0_3_cls = 'results/six_workers_iid_three_cls/acc_worker_0_2021-09-21-00-01.csv'
+    edge_1_3_cls = 'results/six_workers_iid_three_cls/acc_worker_1_2021-09-21-00-02.csv'
+    edge_2_3_cls = 'results/six_workers_iid_three_cls/acc_worker_2_2021-09-21-00-04.csv'
+    edge_3_3_cls = 'results/six_workers_iid_three_cls/acc_worker_3_2021-09-21-00-05.csv'
+    edge_4_3_cls = 'results/six_workers_iid_three_cls/acc_worker_4_2021-09-21-00-06.csv'
+    edge_5_3_cls = 'results/six_workers_iid_three_cls/acc_worker_5_2021-09-21-00-07.csv'
+
+
+    fedavg_3_cls_200round = '/home/users/yitao/Code/python-socket-FL/' + \
+                'results/cifar100_iid_six_worker_fedavg_3cls_200rounds_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
+    
+    fedavg_3_cls_6_workers_200round = '/home/users/yitao/Code/python-socket-FL/' + \
+                'results/cifar100_iid_six_worker_fedavg_3cls_200rounds_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
+    
     fedavg_5_cls = '/home/users/yitao/Code/python-socket-FL/' + \
                 'results/cifar100_iid_five_worker_fedavg_eps_10_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
     
     fedavg_10_cls = '/home/users/yitao/Code/python-socket-FL/' + \
                 'results/cifar100_iid_five_worker_fedavg_10cls_eps_10_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
 
-    cloud_iid_10_cls = 'results/five_workers_iid_ten_cls/distill_concat_2021-09-17-06-54.csv'
-    edge_0_10_cls = 'results/five_workers_iid_ten_cls/acc_worker_0_2021-09-17-06-46.csv'
-    edge_1_10_cls = 'results/five_workers_iid_ten_cls/acc_worker_1_2021-09-17-06-47.csv'
-    edge_2_10_cls = 'results/five_workers_iid_ten_cls/acc_worker_2_2021-09-17-06-49.csv'
-    edge_3_10_cls = 'results/five_workers_iid_ten_cls/acc_worker_3_2021-09-17-06-51.csv'
-    edge_4_10_cls = 'results/five_workers_iid_ten_cls/acc_worker_4_2021-09-17-06-53.csv'
+    # cloud_iid_10_cls = 'results/five_workers_iid_ten_cls/distill_concat_2021-09-17-06-54.csv'
+    # edge_0_10_cls = 'results/five_workers_iid_ten_cls/acc_worker_0_2021-09-17-06-46.csv'
+    # edge_1_10_cls = 'results/five_workers_iid_ten_cls/acc_worker_1_2021-09-17-06-47.csv'
+    # edge_2_10_cls = 'results/five_workers_iid_ten_cls/acc_worker_2_2021-09-17-06-49.csv'
+    # edge_3_10_cls = 'results/five_workers_iid_ten_cls/acc_worker_3_2021-09-17-06-51.csv'
+    # edge_4_10_cls = 'results/five_workers_iid_ten_cls/acc_worker_4_2021-09-17-06-53.csv'
+
+    cloud_iid_10_cls = 'results/five_workers_iid_ten_cls/100_inters/distill_concat_2021-09-17-06-54.csv'
+    edge_0_10_cls = 'results/five_workers_iid_ten_cls/100_inters/acc_worker_0_2021-09-17-06-46.csv'
+    edge_1_10_cls = 'results/five_workers_iid_ten_cls/100_inters/acc_worker_1_2021-09-17-06-47.csv'
+    edge_2_10_cls = 'results/five_workers_iid_ten_cls/100_inters/acc_worker_2_2021-09-17-06-49.csv'
+    edge_3_10_cls = 'results/five_workers_iid_ten_cls/100_inters/acc_worker_3_2021-09-17-06-51.csv'
+    edge_4_10_cls = 'results/five_workers_iid_ten_cls/100_inters/acc_worker_4_2021-09-17-06-53.csv'
+
 
     # data_to_plot['Cloud Public'] = collect_data(cloud)
     # data_to_plot['Cloud Private'] = collect_data(cloud_private)
@@ -125,9 +166,18 @@ if __name__ == "__main__":
     # data_to_plot['Edge 3'] = collect_data(edge_3_10_cls)
     # data_to_plot['Edge 4'] = collect_data(edge_4_10_cls)
 
+    data_to_plot['Federated Distillation'] = collect_data(cloud_iid_3_cls)
+    data_to_plot['Edge 0'] = collect_data(edge_0_3_cls)
+    data_to_plot['Edge 1'] = collect_data(edge_1_3_cls)
+    data_to_plot['Edge 2'] = collect_data(edge_2_3_cls)
+    data_to_plot['Edge 3'] = collect_data(edge_3_3_cls)
+    data_to_plot['Edge 4'] = collect_data(edge_4_3_cls)
+    data_to_plot['Edge 5'] = collect_data(edge_5_3_cls)
+    data_to_plot['FedAvg'] = collect_data(fedavg_3_cls_200round)
+
     # data_to_plot['FedAvg'] = collect_data(fedavg_5_cls)
-    data_to_plot['FedAvg 10cls'] = collect_data(fedavg_10_cls)
+    # data_to_plot['FedAvg 10cls'] = collect_data(fedavg_10_cls)
 
     # plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Both Edge and Cloud Classifies 10 Classes', output='results/five_workers_iid/iid.png')
     # plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Each Edge classifies 2 Classes', output='results/public_percent_0.5_2_cls_adam_lambda_1/edge_full.png')
-    plot(data_to_plot, 'Round', 'Top-1 test accuracy', 'FedAvg 5 workers 10 Classes', output='results/five_workers_iid/fedavg_10cls.png')
+    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', '', output='results/six_workers_iid_three_cls/iid_6_edges_3_cls.png')

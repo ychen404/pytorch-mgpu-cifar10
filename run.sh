@@ -127,15 +127,15 @@
 
 #public_percent_0.5_4_cls_adam_lambda_1_iid_public_distill_average
 # split=0.04
-split=0.1
-CUDA_VISIBLE_DEVICES=0 python3 train_cifar.py \
-                --workspace five_workers_iid_ten_cls \
+split=0.03
+CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
+                --workspace ten_workers_iid_three_cls \
                 --net res8 \
                 --cloud res18 \
                 --split $split \
                 --split_classes \
                 --dataset cifar100 \
-                --num_workers 5 \
+                --num_workers 10 \
                 --epoch 200 \
                 --cloud_epoch 200 \
                 --optimizer adam \
@@ -147,16 +147,7 @@ CUDA_VISIBLE_DEVICES=0 python3 train_cifar.py \
                 --alternate \
                 --public_distill \
                 --public_percent 0.5
-                # --selection 
-
-
-
-
-
-
-
-
-
+                # --selection
 
 
 # adam private data (selection method, pseudo labels)
