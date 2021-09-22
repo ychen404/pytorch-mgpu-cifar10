@@ -172,7 +172,6 @@ def load_edge_checkpoint_fullpath(net, checkpoint):
 
 
 
-
 def print_total_params(net):
     total_params = sum(p.numel() for p in net.parameters())
     layers = len(list(net.modules()))

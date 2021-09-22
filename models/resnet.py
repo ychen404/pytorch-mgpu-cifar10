@@ -8,6 +8,7 @@ Reference:
 
 import torch.nn as nn
 import math
+import pdb
 
 
 def conv3x3(in_planes, out_planes, stride=1):
@@ -171,9 +172,15 @@ class ResNet(nn.Module):
         
         self.layer1 = self._make_layer(block, 16, layers[0])
         self.layer2 = self._make_layer(block, 32, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 64, layers[2], stride=2)
-        self.avgpool = nn.AvgPool2d(8, stride=1)
-        self.fc = nn.Linear(64 * block.expansion, num_classes)
+                    
+        if len(layers) == 3:
+            self.layer3 = self._make_layer(block, 64, layers[2], stride=2)
+            self.avgpool = nn.AvgPool2d(8, stride=1)
+            self.fc = nn.Linear(64 * block.expansion, num_classes)
+        
+        else:
+            self.avgpool = nn.AvgPool2d(16, stride=1)
+            self.fc = nn.Linear(32 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -208,12 +215,15 @@ class ResNet(nn.Module):
 
         x = self.layer1(x)
         x = self.layer2(x)
-        x = self.layer3(x)
+        
+        if 'layer3' in self._modules:
+            x = self.layer3(x)
+        # pdb.set_trace()
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
-
+        
         return x
 
 
@@ -270,6 +280,10 @@ class PreAct_ResNet(nn.Module):
 
         return x
 
+
+def resnet6(**kwargs):
+    model = ResNet(BasicBlock, [1, 1], **kwargs)
+    return model
 
 def resnet8(**kwargs):
     model = ResNet(BasicBlock, [1, 1, 1], **kwargs)
@@ -334,3 +348,11 @@ def preact_resnet164(**kwargs):
 def preact_resnet1001(**kwargs):
     model = PreAct_ResNet(PreActBottleneck, [111, 111, 111], **kwargs)
     return model
+
+
+if __name__ == "__main__":
+    net = resnet6(num_classes=100)
+    # print(net)
+    total_params = sum(p.numel() for p in net.parameters())
+    layers = len(list(net.modules()))
+    print(f" total parameters: {total_params}, layers {layers}")

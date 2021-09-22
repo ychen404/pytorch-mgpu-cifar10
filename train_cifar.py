@@ -40,6 +40,7 @@ def parse_arguments():
     parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
     parser.add_argument('--net', type=str, default='res8')
     parser.add_argument('--num_workers', default=2, type=int, help='number of edge workers')
+    parser.add_argument('--num_rounds', default=1, type=int, help='number of rounds')
     parser.add_argument('--cloud', type=str, default='res18')
     parser.add_argument('--dataset', type=str, default='cifar10')
     parser.add_argument('--batch_size', type=int, default='128')
@@ -169,7 +170,10 @@ def build_model_from_name(name, num_classes):
     print(name, type(name))
     print(name == 'res8')
 
-    if name == 'res8':
+    if name == 'res6':
+        net = resnet6(num_classes=num_classes)
+
+    elif name == 'res8':
         net = resnet8(num_classes=num_classes)    
 
     elif name == 'res50':
@@ -207,6 +211,16 @@ def save_figure(path, csv_name):
     print(data_to_plot)
     plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy', output= path + '/' + 'result.png')
 
+
+def check_model_trainable(nets):
+    for net in nets:
+        for param in net.parameters():
+            param.requires_grad = True
+
+        net.train()
+        
+    return nets
+
 def run_train(net, args, trainloader, testloader, worker_num, device, msg):
     
     list_loss = []
@@ -218,7 +232,7 @@ def run_train(net, args, trainloader, testloader, worker_num, device, msg):
     csv_name = 'acc_'  + 'worker_' + str(worker_num) + '_' + strtime + '.csv'
     path = 'results/' + args.workspace
         
-    for epoch in range(start_epoch, start_epoch + args.epoch):
+    for epoch in range(start_epoch, start_epoch + args.epoch):        
         trainloss = train(epoch, net, criterion_edge, optimizer_edge, trainloader, device)
         acc, best_acc = test(epoch, args, net, criterion_edge, testloader, device, msg)
         logger.debug(f"The result is: {acc}")
@@ -905,13 +919,7 @@ if __name__ == "__main__":
                 elif args.public_distill and args.iid:
                     logger.info(f"Using {int(args.split * 100)}% for iid")
                     extract_trainset = extract_classes(trainset_private, args.split, workerid=0)
-                    # trainset_max = 0
-                    # for trainset in extract_trainset:
-                    #     if trainset[1] > trainset_max:
-                    #         trainset_max = trainset[1]
                     
-                    # print(f"trainset_max: {trainset_max}")
-
                     # use 1 thread worker instead of 4 in the single gpu case
                     trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
                     _, testloader_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
@@ -945,6 +953,7 @@ if __name__ == "__main__":
                 else:
                     if args.public_distill:
                         logger.debug("In the public_distill condition")
+                        
                         trainloader_1, testloader_1 = get_worker_data(trainset_private, args, workerid=1)
                         trainloader_2, testloader_2 = get_worker_data(trainset_private, args, workerid=2)
                         _, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
@@ -953,6 +962,7 @@ if __name__ == "__main__":
                         # trainloader_public, _ = get_worker_data_hardcode(trainset_public, 0.1, workerid=0)
                         # the split is hardcoded for testing edge0's performance
                         trainloader_private, _ = get_worker_data_hardcode(trainset_private, args.num_workers * args.split, workerid=0)
+                        
                         if args.iid:
                             trainloader_public, testloader_public = get_worker_data_hardcode(trainset_public, args.split, workerid=0)
                         
@@ -1050,7 +1060,7 @@ if __name__ == "__main__":
     if args.iid:
         logger.debug("Running iid test")
         # run_train(net, args, trainloaders[0], testloader_iid, 0, device, 'edge_0')
-        run_train(nets[0], args, trainloaders[0], testloader_iid, 0, device, 'edge_0')
+        # run_train(nets[0], args, trainloaders[0], testloader_iid, 0, device, 'edge_0')
     else:
         # Train the first edge model
         if args.resume:
@@ -1065,15 +1075,6 @@ if __name__ == "__main__":
     if args.baseline:
         exit()
 
-    # logger.debug(f"*********Cloud param*********")
-    # print_param(cloud_net)
-
-    # logger.debug(f"*********Edge param*********")
-    # print_param(net)
-
-    # Distill from the first worker
-    # logger.debug(30*'*' + 'Distilling from worker 0' + 30*'*')
-
     if not args.alternate: # if not alternate, then perform sequential distillation
         if args.resume:
             nets[0] = load_edge_checkpoint_fullpath(nets[0], 'results/public_percent_0.5_2_cls_adam_lambda_1/checkpoint/edge_0_ckpt.t7')
@@ -1087,11 +1088,24 @@ if __name__ == "__main__":
             nets[1] = load_edge_checkpoint_fullpath(nets[1], 'results/public_percent_0.5_2_cls_adam_lambda_1/checkpoint/edge_1_ckpt.t7')
         else:
             if args.iid:
-                run_train(nets[1], args, trainloaders[1], testloader_iid, 1, device, 'edge_1')
+                """
+                commented out the unnecessary trainings. It's time to merge iterative and seperate together?
+                Starting from the iid case using public data to distill 
+                """
+                # run_train(nets[1], args, trainloaders[1], testloader_iid, 1, device, 'edge_1')
 
-                for i in range(2, args.num_workers, 1):
-                    run_train(nets[i], args, trainloaders[i], testloader_iid, i, device, 'edge_' + str(i))
+                for round in range(args.num_rounds):
+                    
+                    # change models back to trainable from the second round
+                    # if round > 1:
+                    logger.debug(f"############# round {round} #############")
 
+                    nets = check_model_trainable(nets)
+                    for i in range(0, args.num_workers, 1):
+                        run_train(nets[i], args, trainloaders[i], testloader_iid, i, device, 'edge_' + str(i))
+                    
+                    logger.debug("Distilling with public data")
+                    run_concat_distill_multi(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device)
             else:
                 run_train(nets[1], args, trainloader_1, testloader_1, 1, device, 'edge_1')
             
@@ -1114,7 +1128,11 @@ if __name__ == "__main__":
                 
                 # run_concat_distill_two(nets[0], nets[1], cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device)
                 # Enable multiple edge models
-                run_concat_distill_multi(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device)
+                
+                ######################### seperate distillation step #########################
+                # run_concat_distill_multi(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device)
+                ##############################################################################
+
                 # try to use private data to distill
                 # run_concat_distill_two(net, net_1, cloud_net, args, trainloader_private, testloader_public, worker_num=0, device=device)
             else:

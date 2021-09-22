@@ -272,9 +272,9 @@ def resnet152(**kwargs):
     return ResNet(Bottleneck, [3, 8, 36, 3], **kwargs)
 
 
-def test():
-    net = resnet18()
-    y = net(torch.randn(1, 3, 32, 32))
-    print(y.size())
-
-# test()
+if __name__ == "__main__":
+    net = resnet18(num_classes=100)
+    # print(net)
+    total_params = sum(p.numel() for p in net.parameters())
+    layers = len(list(net.modules()))
+    print(f" total parameters: {total_params}, layers {layers}")
