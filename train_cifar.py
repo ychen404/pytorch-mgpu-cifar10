@@ -46,7 +46,7 @@ def parse_arguments():
     parser.add_argument('--batch_size', type=int, default='128')
     parser.add_argument('--cloud_batch_size', type=int, default='128')
     parser.add_argument('--workspace', default='')
-    parser.add_argument("--split", default=0.5, type=float, help="split training data")
+    parser.add_argument("--split", default=0.1, type=float, help="split training data")
     parser.add_argument("--split_classes", action='store_true', help='split the number of classes to reduce difficulty')
     parser.add_argument("--baseline", action='store_true', help='Perform only training for collection baseline')
     parser.add_argument('--temperature', default=1, type=float, help='temperature for distillation')
@@ -59,13 +59,22 @@ def parse_arguments():
     parser.add_argument('--save_loader', action='store_true', help="save trainloaders")
     parser.add_argument('--alpha', default=100, type=float, help='alpha for iid setting')
     parser.add_argument('--lamb', default=0.5, type=float, help='lambda for distillation')
-    parser.add_argument('--public_percent', default=0.2, type=float, help='percentage training data to be public')
+    parser.add_argument('--public_percent', default=0.5, type=float, help='percentage training data to be public')
     parser.add_argument('--selection', action='store_true', help="enable selection method")
     parser.add_argument('--use_pseudo_labels', action='store_true', help="enable selection method")
+    parser.add_argument('--add_cifar10', action='store_true', help="add cifar10 to distillation")
+    parser.add_argument('--finetune', action='store_true', help="finetune the cloud model")
+
 
     args = parser.parse_args()
 
     return args
+
+def defrost_net(net):
+    for param in net.parameters():
+        param.requires_grad = True
+    net.train()
+    return net
 
 def freeze_net(net):
     # freeze the layers of a model
@@ -79,17 +88,21 @@ def freeze_except_last_layer(net):
     # freeze the layers of a model
     for param in net.parameters():
         param.requires_grad = False
-    # set the teacher net into evaluation mode
-    for param in net.fc.parameters():
-        param.requires_grad = True
     
+    # Resnet18 uses linear instead of fc layer as the last layer
+    # for param in net.fc.parameters():
+    #     param.requires_grad = True
+
+    for param in net.linear.parameters():
+        param.requires_grad = True    
+
     for name, param in net.named_parameters():
         print(name, param.requires_grad)
 
     return net
 
 # Training
-def train(epoch, net, criterion, optimizer, trainloader, device):
+def train(epoch, round, net, criterion, optimizer, trainloader, device):
     logger.debug('\nEpoch: %d' % epoch)
     net.train()
     train_loss = 0
@@ -221,7 +234,7 @@ def check_model_trainable(nets):
         
     return nets
 
-def run_train(net, args, trainloader, testloader, worker_num, device, msg):
+def run_train(net, round, args, trainloader, testloader, worker_num, device, msg):
     
     list_loss = []
     strtime = get_time()
@@ -233,7 +246,7 @@ def run_train(net, args, trainloader, testloader, worker_num, device, msg):
     path = 'results/' + args.workspace
         
     for epoch in range(start_epoch, start_epoch + args.epoch):        
-        trainloss = train(epoch, net, criterion_edge, optimizer_edge, trainloader, device)
+        trainloss = train(epoch, round, net, criterion_edge, optimizer_edge, trainloader, device)
         acc, best_acc = test(epoch, args, net, criterion_edge, testloader, device, msg)
         logger.debug(f"The result is: {acc}")
         # write_csv('acc_' + args.workspace + '_worker_' + str(worker_num) + '_' + strtime + '.csv', str(acc))
@@ -753,7 +766,8 @@ def run_concat_distill_multi(
     trainloader_cloud, 
     testloader_cloud,
     worker_num, 
-    device
+    device,
+    prefix
     )->nn.Module:
     """Concatenate the three datase from the edge workers together and test distillation with lambda set to 0"""
     
@@ -801,7 +815,9 @@ def run_concat_distill_multi(
         acc, best_acc = test(epoch, args, cloud, criterion_cloud, testloader_cloud, device, 'cloud')
 
         logger.debug(f"The result is: {acc}")
-        write_csv('results/' + args.workspace, 'distill_concat_' + strtime + '.csv', str(acc))
+        # write_csv('results/' + args.workspace, 'distill_concat_' + strtime + '.csv', str(acc))
+        write_csv('results/' + args.workspace, prefix + strtime + '.csv', str(acc))
+
         list_loss.append(trainloss)
 
     logger.debug("===> BEST ACC. DISTILLATION: %.2f%%" % (best_acc))
@@ -894,6 +910,7 @@ if __name__ == "__main__":
     else:
         logger.info('==> CIFAR-100')
         trainset = get_cifar100()
+        
         transform_test = get_cifar100_transfromtest()
 
         if args.public_distill: 
@@ -1096,16 +1113,23 @@ if __name__ == "__main__":
 
                 for round in range(args.num_rounds):
                     
-                    # change models back to trainable from the second round
-                    # if round > 1:
                     logger.debug(f"############# round {round} #############")
-
                     nets = check_model_trainable(nets)
                     for i in range(0, args.num_workers, 1):
-                        run_train(nets[i], args, trainloaders[i], testloader_iid, i, device, 'edge_' + str(i))
+                        run_train(nets[i], round, args, trainloaders[i], testloader_iid, i, device, 'edge_' + str(i))
                     
                     logger.debug("Distilling with public data")
-                    run_concat_distill_multi(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device)
+                    run_concat_distill_multi(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device, prefix='distill_')
+
+                if args.add_cifar10:
+                    logger.debug("Use cifar10 to distill again")
+                    trainloader_cifar10, testloader_cifar10 = get_cifar10_loader(args)
+                    run_concat_distill_multi(nets, cloud_net, args, trainloader_cifar10, testloader_public, worker_num=0, device=device, prefix='cifar10_')                
+                
+                if args.finetune:
+                    cloud_net = freeze_except_last_layer(cloud_net)
+                    run_train(cloud_net, 0, args, trainloader_public, testloader_public, 9, device, 'cloud_finetune')
+
             else:
                 run_train(nets[1], args, trainloader_1, testloader_1, 1, device, 'edge_1')
             

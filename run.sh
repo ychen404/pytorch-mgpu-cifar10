@@ -1,26 +1,6 @@
 # split classes 
 # split = 0.02 ---------------> two classes (0.02 * 100)
 
-# split=0.1
-# CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
-#                 --workspace alternate_data_3_workers_res18_cloud_epoch_400 \
-#                 --net res8 \
-#                 --cloud res18 \
-#                 --split $split \
-#                 --split_classes \
-#                 --dataset cifar100 \
-#                 --epoch 200 \
-#                 --cloud_epoch 200 \
-#                 --cloud_epoch 400 \
-#                 --lr 0.1 \
-#                 --two \
-#                 --alternate
-
-# alternate_data_3_workers_res18_adam_lambda_0
-# concat_data_3_workers_res18_adam_lambda_1
-# data_selection_distill_3_workers_lambda_0.5
-# data_selection_distill_3_workers_lambda_1
-
 # adam private data
 # split=0.1
 # CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
@@ -148,10 +128,10 @@
 #                 --public_distill \
 #                 --public_percent 0.5
                 # --selection
-# iterative
-split=0.03
-CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
-                --workspace five_workers_iid_three_cls_res6 \
+# iterative 
+split=0.06
+CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
+                --workspace five_workers_iid_six_cls_res6_add_finetune \
                 --net res6 \
                 --cloud res18 \
                 --split $split \
@@ -159,8 +139,8 @@ CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
                 --dataset cifar100 \
                 --num_workers 5 \
                 --num_rounds 1 \
-                --epoch 2 \
-                --cloud_epoch 2 \
+                --epoch 200 \
+                --cloud_epoch 200 \
                 --optimizer adam \
                 --cloud_lr 0.001 \
                 --lr 0.1 \
@@ -169,8 +149,10 @@ CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
                 --two \
                 --alternate \
                 --public_distill \
+                --finetune \
                 --public_percent 0.5
                 # --selection
+                # --add_cifar10 \
 
 
 # adam private data (selection method, pseudo labels)
