@@ -150,6 +150,12 @@ root = 'results/' + args.workspace
 check_dir(root)
 # print(net)
 
+for name, param in net.named_parameters():
+    print(name, param.requires_grad)
+
+exit()
+
+
 for epoch in range(start_epoch, start_epoch+200):
     trainloss = train(epoch)
     acc = test_acc(epoch)

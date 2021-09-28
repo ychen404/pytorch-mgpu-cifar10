@@ -211,3 +211,8 @@ def get_logger_handler(path):
     f_handler.setFormatter(f_format)
 
     return c_handler, f_handler
+
+def check_dir(directory):
+
+    if not os.path.exists(directory):
+        os.makedirs(directory)    

@@ -53,7 +53,6 @@ def parse_arguments():
     parser.add_argument('--optimizer', default='sgd')
     parser.add_argument('--two', action='store_true')
     parser.add_argument('--iid', action='store_true', help="test iid case")
-    parser.add_argument('--client_classes', default=2, type=int, help="number of classes for each client")
     parser.add_argument('--alternate', action='store_true', help="test the alternative case")
     parser.add_argument('--public_distill', action='store_true', help="use public data to distill")
     parser.add_argument('--exist_loader', action='store_true', help="there is exist loader")
@@ -880,6 +879,10 @@ def test_only(
     write_csv('results/' + args.workspace, 'acc_' +  'test_other_ten' + strtime + '.csv', str(acc))
     logger.debug("===> BEST ACC. ON OTHER TEN CLASSES: %.2f%%" % (best_acc))
 
+def check_dir(directory):
+
+    if not os.path.exists(directory):
+        os.makedirs(directory)    
     
 if __name__ == "__main__":
 
@@ -919,9 +922,9 @@ if __name__ == "__main__":
             trainloader = torch.utils.data.DataLoader(trainset_a, batch_size=args.batch_size, shuffle=True, num_workers=4)
         
         elif args.split != 0 and args.split_classes and not args.baseline:
-            # Use all data
+            
             logger.info(f"is it here Using {int(args.split * 100)}% of training data and classifying {int(args.split * 100)}%")
-
+            
             if args.exist_loader:
                 trainloader = torch.load('trainloader_first_10cls.pth')
                 testloader = torch.load('testloader_first_10cls.pth')
@@ -929,19 +932,17 @@ if __name__ == "__main__":
             else:
                 if args.public_distill and not args.iid:
                     trainloader, testloader = get_worker_data(trainset_private, args, workerid=0)
-
                 
                 elif args.public_distill and args.iid:
                     logger.info(f"Using {int(args.split * 100)}% for iid")
-                    extract_trainset = extract_classes(trainset_private, args.split, workerid=0)                    
+                    extract_trainset = extract_classes(trainset_private, args.split, workerid=0)
+                    
                     # use 1 thread worker instead of 4 in the single gpu case
                     trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
                     _, testloader_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
 
                 else:
-                    # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
-                    trainloaders = get_subclasses_loaders(trainset, args.num_workers, args.client_classes, num_workers=4, seed=100)
-                    exit()
+                    trainloader, testloader = get_worker_data(trainset, args, workerid=0)
 
             logger.debug(f"exist_loader: {args.exist_loader}, save_loader: {args.save_loader}")
 
@@ -1067,7 +1068,24 @@ if __name__ == "__main__":
         nets.append(net)
 
     cloud_net = build_model_from_name(args.cloud, num_classes)
-    
+    # cloud_net = build_model_from_name('res50', num_classes)
+
+    if args.iid:
+        logger.debug("Running iid test")
+
+    else:
+        # Train the first edge model
+        if args.resume:
+            nets[0] = load_edge_checkpoint(nets[0], 'res8_edge_0_ckpt.t7')
+        else:
+            run_train(nets[0], args, trainloader, testloader, 0, device, 'edge_0')
+            # run_train(net, args, trainloader, trainloader, 0, device, 'edge_0')
+            # run_train(net, args, trainloader, trainloader_public, 0, device, 'edge_0')
+            
+    # logger.debug(30*'*' + 'Before Distilling from worker 0' + 30*'*')
+
+    if args.baseline:
+        exit()
 
     if not args.alternate: # if not alternate, then perform sequential distillation
         if args.resume:
@@ -1108,11 +1126,8 @@ if __name__ == "__main__":
                     run_train(cloud_net, 0, args, trainloader_public, testloader_public, 9, device, 'cloud_finetune')
 
             else:
-                # non-iid here
-                logger.debug(30*'*' + 'Non-iid' + 30*'*')
-                
-                exit()       
-                
+                run_train(nets[1], args, trainloader_1, testloader_1, 1, device, 'edge_1')
+            
         logger.debug(30*'*' + 'Done training workers' + 30*'*')
 
         if not args.alternate:

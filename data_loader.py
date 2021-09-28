@@ -105,9 +105,11 @@ def get_worker_data(trainset, args, workerid)->torch.utils.data.dataloader.DataL
     """Get train data for each edge worker"""
     transform_test = get_cifar100_transfromtest()
 
+    logger.debug(f"Extracting training data")
     extract_trainset = extract_classes(trainset, args.split, workerid)
     trainloader = torch.utils.data.DataLoader(extract_trainset, batch_size=args.batch_size, shuffle=True, num_workers=4)
     
+    logger.debug(f"Extracting test data")
     testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
     extract_testset = extract_classes(testset, args.split, workerid)
     testloader = torch.utils.data.DataLoader(extract_testset, batch_size=128, shuffle=False, num_workers=4)
@@ -197,6 +199,37 @@ def split_dirichlet(labels, n_clients, n_data, alpha, double_stochstic=True, see
   
     return client_idcs
 
+
+def split_uniform(labels, n_clients, client_classes, seed=0):
+    '''Splits data among the clients according to a uniformlly, i.e., each client has a few classes'''
+
+    np.random.seed(seed)
+
+    if isinstance(labels, torch.Tensor):
+      labels = labels.numpy()
+
+    n_classes = np.max(labels)+1
+
+    class_idcs = [np.argwhere(np.array(labels)==y).flatten() 
+           for y in range(n_classes)]
+
+    print(len(class_idcs))
+    print(len(class_idcs[0]))
+
+    client_idcs = [[] for _ in range(n_clients)]
+    print(f"len client_idcs {len(client_idcs)}")
+
+    for idx, c in enumerate(class_idcs):
+        for i in range(n_clients):
+            if idx == client_classes * i or idx == client_classes * i + 1:
+                client_idcs[i] += [c]
+
+    client_idcs = [np.concatenate(idcs) for idcs in client_idcs]
+
+    print_split(client_idcs, labels)
+  
+    return client_idcs
+
 def print_split(idcs, labels):
     n_labels = np.max(labels) + 1 
     print("Data split:")
@@ -227,15 +260,16 @@ def make_double_stochstic(x):
 
     return x
 
+
+
 def get_dirichlet_loaders(train_data, n_clients=3, alpha=0, batch_size=128, n_data=None, num_workers=4, seed=0):
 
     # Check if it is train_data object
     if not isinstance(train_data, torchvision.datasets.cifar.CIFAR100):
         train_data_targets = extract_targets(train_data)
-        # print(f"train_data_targets: {train_data_targets}")
 
     else:
-        train_data_targets = train_data.targets    
+        train_data_targets = train_data.targets
     
     subset_idcs = split_dirichlet(train_data_targets, n_clients, n_data, alpha, seed=seed)
     client_data = [torch.utils.data.Subset(train_data, subset_idcs[i]) for i in range(n_clients)]
@@ -247,4 +281,24 @@ def get_dirichlet_loaders(train_data, n_clients=3, alpha=0, batch_size=128, n_da
                                                     pin_memory=True) for subset in client_data]
 
 
+    return client_loaders
+
+def get_subclasses_loaders(train_data, n_clients=3, client_classes=2, batch_size=128, num_workers=4, seed=0):
+
+    # Check if it is train_data object
+    if not isinstance(train_data, torchvision.datasets.cifar.CIFAR100):
+        train_data_targets = extract_targets(train_data)
+
+    else:
+        train_data_targets = train_data.targets
+        # print(train_data_targets)
+
+    subset_idcs = split_uniform(train_data_targets, n_clients, client_classes, seed=seed)
+    client_data = [torch.utils.data.Subset(train_data, subset_idcs[i]) for i in range(n_clients)]
+
+    client_loaders = [torch.utils.data.DataLoader(subset, 
+                                                batch_size=batch_size, 
+                                                shuffle=True, 
+                                                num_workers=num_workers, 
+                                                pin_memory=True) for subset in client_data]
     return client_loaders

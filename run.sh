@@ -128,31 +128,82 @@
 #                 --public_distill \
 #                 --public_percent 0.5
                 # --selection
-# iterative 
-split=0.06
-CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
-                --workspace five_workers_iid_six_cls_res6_add_finetune \
+
+# iid 
+# split=0.04
+# CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
+#                 --workspace seven_workers_iid_four_cls_res6 \
+#                 --net res6 \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --dataset cifar100 \
+#                 --num_workers 7 \
+#                 --num_rounds 1 \
+#                 --epoch 200 \
+#                 --cloud_epoch 200 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --iid \
+#                 --two \
+#                 --alternate \
+#                 --public_distill \
+#                 --finetune \
+#                 --public_percent 0.5
+#                 # --selection
+#                 # --add_cifar10 \
+
+# non-iid
+split=0.04
+CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
+                --workspace two_cls_res6_four_workers_non_iid \
                 --net res6 \
                 --cloud res18 \
                 --split $split \
                 --split_classes \
                 --dataset cifar100 \
-                --num_workers 5 \
+                --num_workers 4 \
                 --num_rounds 1 \
-                --epoch 200 \
-                --cloud_epoch 200 \
+                --epoch 2 \
+                --cloud_epoch 2 \
                 --optimizer adam \
                 --cloud_lr 0.001 \
                 --lr 0.1 \
                 --lamb 1 \
-                --iid \
                 --two \
                 --alternate \
-                --public_distill \
-                --finetune \
-                --public_percent 0.5
                 # --selection
                 # --add_cifar10 \
+
+
+# split=0.06
+# CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
+#                 --workspace five_workers_iid_six_cls_res6_add_finetune \
+#                 --net res6 \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --dataset cifar100 \
+#                 --num_workers 5 \
+#                 --num_rounds 1 \
+#                 --epoch 200 \
+#                 --cloud_epoch 200 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --iid \
+#                 --two \
+#                 --alternate \
+#                 --public_distill \
+#                 --finetune \
+#                 --public_percent 0.5
+                # --selection
+                # --add_cifar10 \
+
+
 
 
 # adam private data (selection method, pseudo labels)
