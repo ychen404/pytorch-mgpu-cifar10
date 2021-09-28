@@ -156,7 +156,7 @@
 #                 # --add_cifar10 \
 
 # non-iid
-split=0.04
+split=0.02
 CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
                 --workspace two_cls_res6_four_workers_non_iid \
                 --net res6 \
@@ -166,7 +166,7 @@ CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
                 --dataset cifar100 \
                 --num_workers 4 \
                 --num_rounds 1 \
-                --epoch 2 \
+                --epoch 1 \
                 --cloud_epoch 2 \
                 --optimizer adam \
                 --cloud_lr 0.001 \
@@ -174,7 +174,7 @@ CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
                 --lamb 1 \
                 --two \
                 --alternate \
-                # --selection
+                --selection
                 # --add_cifar10 \
 
 

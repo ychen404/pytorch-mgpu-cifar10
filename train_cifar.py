@@ -241,7 +241,6 @@ def run_train(net, round, args, trainloader, testloader, worker_num, device, msg
     strtime = get_time()
     criterion_edge = nn.CrossEntropyLoss()
     optimizer_edge = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
-    # optimizer_edge = optim.Adam(net.parameters(), lr=args.lr, weight_decay=5e-4)
 
     csv_name = 'acc_'  + 'worker_' + str(worker_num) + '_' + strtime + '.csv'
     path = 'results/' + args.workspace
@@ -609,6 +608,8 @@ def distill_from_multi_workers(
         end = worker_id * num_classes + num_classes - 1
         bounds.append([start, end])
 
+    print(bounds)
+
     counter = 0
     logger.debug(f"Lambda: {lambda_}")
     for batch_idx, (inputs, targets) in enumerate(trainloader_concat):
@@ -635,18 +636,25 @@ def distill_from_multi_workers(
                 
                 # bounds is the list of the lower and upper bound of each worker
                 # e.g., [[0, 1], [2, 3]]
-
-                if bounds[0][0] <= target.item() <= bounds[0][1] :
-                    # logger.debug("first worker data")
-                    out_t_temp.append (edge_net_0(input))
-                elif bounds[1][0] <= target.item() <= bounds[1][1] :
-                    # logger.debug("second worker data")
-                    out_t_temp.append (edge_net_1(input))
-                else:
-                    logger.debug("Should not happen")
-                    exit()
-
+                for i, bound in enumerate(bounds):
+                    # print(f"bound {bound}, target {target.item()}")
+                    if int(target.item()) in bound:
+                    #    print("found")
+                       out_t_temp.append (edge_nets[i](input))
+                    else:
+                      continue
+                
+                # if bounds[0][0] <= target.item() <= bounds[0][1] :
+                #     # logger.debug("first worker data")
+                #     out_t_temp.append (edge_net_0(input))
+                # elif bounds[1][0] <= target.item() <= bounds[1][1] :
+                #     # logger.debug("second worker data")
+                #     out_t_temp.append (edge_net_1(input))
+                # else:
+                #     logger.debug("Should not happen")
+                #     exit()
                 # out_t_temp.append (edge_net_0(input))
+            
             logger.debug(f"len out_t_temp: {len(out_t_temp)}")
             out_t = torch.cat(out_t_temp, dim=0) # use dim 0 to stack the tensors
             assert out_t.shape[1] == 100, f"the shape is {out_t.shape}, should be (x, 100)"
@@ -929,7 +937,6 @@ if __name__ == "__main__":
             else:
                 if args.public_distill and not args.iid:
                     trainloader, testloader = get_worker_data(trainset_private, args, workerid=0)
-
                 
                 elif args.public_distill and args.iid:
                     logger.info(f"Using {int(args.split * 100)}% for iid")
@@ -941,13 +948,13 @@ if __name__ == "__main__":
                 else:
                     # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
                     trainloaders = get_subclasses_loaders(trainset, args.num_workers, args.client_classes, num_workers=4, seed=100)
+                    trainloader_all = get_subclasses_loaders(trainset, n_clients=1, client_classes=int(args.num_workers * args.client_classes), num_workers=4, seed=100)
+
                     # _, testloader_non_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
-                    testloader_non_iid = get_subclasses_loaders(testset, n_clients=1, client_classes=8, num_workers=4, seed=100)
+                    testloader_non_iid = get_subclasses_loaders(testset, n_clients=1, client_classes=int(args.num_workers * args.client_classes), num_workers=4, seed=100)
+
+                    # logger.debug(testloader_non_iid[0])
                     testloaders = get_subclasses_loaders(testset, args.num_workers, args.client_classes, num_workers=4, seed=100)
-
-                    exit()
-
-            logger.debug(f"exist_loader: {args.exist_loader}, save_loader: {args.save_loader}")
 
             if args.save_loader:
                 torch.save(trainloader, 'trainloader_first_10cls.pth')
@@ -993,18 +1000,7 @@ if __name__ == "__main__":
 
                     else:
                         logger.debug("In the else condition")
-                        trainloader_1, testloader_1 = get_worker_data(trainset, args, workerid=1)
                         
-                        # skip the 3rd worker now
-                        #trainloader_2, testloader_2 = get_worker_data(trainset, args, workerid=2)
-                        
-                        # _, testloader_20cls = get_worker_data_hardcode(trainset, 0.2, workerid=0)
-                        # _, testloader_20cls_disjoint = get_worker_data_hardcode(trainset, 0.2, workerid=0, disjoint=True)
-                        # trainloader_30cls, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
-                        # trainloader_10cls, testloader_10cls = get_worker_data_hardcode(trainset, 0.1, workerid=0)
-                        trainloader_cloud, testloader_cloud = get_worker_data_hardcode(trainset, args.num_workers * args.split, workerid=0)
-
-
                 if args.save_loader:
                     torch.save(trainloader_1, 'trainloader_second_10cls.pth')
                     torch.save(testloader_1, 'testloader_second_10cls.pth')
@@ -1032,17 +1028,6 @@ if __name__ == "__main__":
             else: # iid case
                 logger.info(f"Using {int(args.split * 100)}% for iid baseline")
                 extract_trainset = extract_classes(trainset, args.split, workerid=0)
-                
-                # find out max target
-                # max_target = 0
-                # target_dict = {}
-                # for i in range(len(extract_trainset)):
-                #     curr_target = extract_trainset[i][1]
-                #     max_target = max(max_target, curr_target)
-                #     if curr_target not in target_dict:
-                #         target_dict[curr_target] = 0
-                #     target_dict[curr_target] += 1
-                # logger.debug(f"max_target: {max_target}, target_dict: {target_dict}")
                         
                 # use 1 thread worker instead of 4 in the single gpu case
                 trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
@@ -1071,7 +1056,6 @@ if __name__ == "__main__":
         nets.append(net)
 
     cloud_net = build_model_from_name(args.cloud, num_classes)
-    
 
     if not args.alternate: # if not alternate, then perform sequential distillation
         if args.resume:
@@ -1114,7 +1098,13 @@ if __name__ == "__main__":
             else:
                 # non-iid here
                 logger.debug(30*'*' + 'Non-iid' + 30*'*')
-                
+                for round in range(args.num_rounds):        
+                    logger.debug(f"############# round {round} #############")
+                    nets = check_model_trainable(nets)
+                    for i in range(0, args.num_workers, 1):
+                        run_train(nets[i], round, args, trainloaders[i], testloader_non_iid[0], i, device, 'edge_' + str(i))
+                    run_concat_distill_multi(nets, cloud_net, args, trainloader_all[0], testloader_non_iid[0], worker_num=0, device=device, prefix='distill_')
+
                 exit()       
                 
         logger.debug(30*'*' + 'Done training workers' + 30*'*')

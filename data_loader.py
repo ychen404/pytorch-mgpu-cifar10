@@ -207,7 +207,9 @@ def split_dirichlet(labels, n_clients, n_data, alpha, double_stochstic=True, see
 
 
 def split_uniform(labels, n_clients, client_classes, seed=0):
-    '''Splits data among the clients according to a uniformlly, i.e., each client has a few classes'''
+    '''Splits data among the clients according to a uniformlly, i.e., each client has a few classes
+        This numpy based implementation is much faster than my previous one
+    '''
 
     np.random.seed(seed)
 
@@ -215,16 +217,16 @@ def split_uniform(labels, n_clients, client_classes, seed=0):
       labels = labels.numpy()
 
     n_classes = np.max(labels)+1
-
     class_idcs = [np.argwhere(np.array(labels)==y).flatten() 
            for y in range(n_classes)]
 
-    print(len(class_idcs))
-    print(len(class_idcs[0]))
-
+    # print(len(class_idcs))
+    # print(len(class_idcs[0]))
     client_idcs = [[] for _ in range(n_clients)]
-    print(f"len client_idcs {len(client_idcs)}")
 
+    # Get the idcs for each client data
+    # for example, client 0 has the first two class, so the idxs are 2x0 and 2x0 + 1
+    # 2 is client_classes, 0 and 1 are cc
     for idx, c in enumerate(class_idcs):
         for i in range(n_clients):
             for cc in range(client_classes):
@@ -240,6 +242,7 @@ def split_uniform(labels, n_clients, client_classes, seed=0):
 def print_split(idcs, labels):
     n_labels = np.max(labels) + 1 
     print("Data split:")
+    
     splits = []
     for i, idccs in enumerate(idcs):
         split = np.sum(np.array(labels)[idccs].reshape(1,-1)==np.arange(n_labels).reshape(-1,1), axis=1)
