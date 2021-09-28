@@ -52,9 +52,15 @@ def get_cifar100():
         transforms.Normalize((0.507, 0.487, 0.441), (0.267, 0.256, 0.276)),
     ])
 
-    trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.507, 0.487, 0.441), (0.267, 0.256, 0.276)),
+    ])
 
-    return trainset
+    trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
+    testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
+
+    return trainset, testset
 
 
 def get_cifar100_transfromtest():
@@ -221,8 +227,9 @@ def split_uniform(labels, n_clients, client_classes, seed=0):
 
     for idx, c in enumerate(class_idcs):
         for i in range(n_clients):
-            if idx == client_classes * i or idx == client_classes * i + 1:
-                client_idcs[i] += [c]
+            for cc in range(client_classes):
+                if idx == client_classes * i + cc:
+                    client_idcs[i] += [c]
 
     client_idcs = [np.concatenate(idcs) for idcs in client_idcs]
 
@@ -261,7 +268,6 @@ def make_double_stochstic(x):
     return x
 
 
-
 def get_dirichlet_loaders(train_data, n_clients=3, alpha=0, batch_size=128, n_data=None, num_workers=4, seed=0):
 
     # Check if it is train_data object
@@ -291,7 +297,6 @@ def get_subclasses_loaders(train_data, n_clients=3, client_classes=2, batch_size
 
     else:
         train_data_targets = train_data.targets
-        # print(train_data_targets)
 
     subset_idcs = split_uniform(train_data_targets, n_clients, client_classes, seed=seed)
     client_data = [torch.utils.data.Subset(train_data, subset_idcs[i]) for i in range(n_clients)]

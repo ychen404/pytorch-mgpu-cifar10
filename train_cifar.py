@@ -906,8 +906,8 @@ if __name__ == "__main__":
 
     else:
         logger.info('==> CIFAR-100')
-        trainset = get_cifar100()
-        
+        trainset, testset = get_cifar100()
+
         transform_test = get_cifar100_transfromtest()
 
         if args.public_distill: 
@@ -941,6 +941,10 @@ if __name__ == "__main__":
                 else:
                     # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
                     trainloaders = get_subclasses_loaders(trainset, args.num_workers, args.client_classes, num_workers=4, seed=100)
+                    # _, testloader_non_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
+                    testloader_non_iid = get_subclasses_loaders(testset, n_clients=1, client_classes=8, num_workers=4, seed=100)
+                    testloaders = get_subclasses_loaders(testset, args.num_workers, args.client_classes, num_workers=4, seed=100)
+
                     exit()
 
             logger.debug(f"exist_loader: {args.exist_loader}, save_loader: {args.save_loader}")
