@@ -15,7 +15,7 @@ import math
 import torch.nn.init as init
 import argparse
 import os
-from data_loader import extract_classes
+from data_loader import extract_classes, split_train_data
 
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,8 @@ parser.add_argument('--net', default='res8')
 parser.add_argument('--opt', default='sgd')
 parser.add_argument('--workspace', default='test_workspace')
 parser.add_argument("--percent_classes", default=1, type=float, help="how many classes to classify")
+parser.add_argument("--percent_data", default=1, type=float, help="percentage of data to use for training")
+
 
 
 args = parser.parse_args()
@@ -111,22 +113,33 @@ transform_test = transforms.Compose([
 
 trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
 testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
+length = len(trainset)
+
 
 if args.percent_classes != 1:
     trainset = extract_classes(trainset, args.percent_classes, workerid=0)
     testset = extract_classes(testset, args.percent_classes, workerid=0)
+    
+    if args.percent_data != 1:
+        trainset, part_b = split_train_data(trainset, args.percent_data)
+        target_length = int(length * args.percent_classes * args.percent_data)
+        assert len(trainset) == target_length, f"Wrong target length. trainset: {len(trainset)} target: {target_length}"
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=4)
 testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False, num_workers=4)
 
 print('==> Building model..')
 
-if args.net == 'res8':
+if args.net == 'res4':
+    net = resnet4(num_classes=100)
+elif args.net == 'res8':
     net = resnet8(num_classes=100)
 elif args.net == 'res6':
     net = resnet6(num_classes=100)
 elif args.net =='res18':
     net = resnet18(num_classes=100)
+elif args.net =='res34':
+    net = resnet34(num_classes=100)
 
 else:
     logger.debug("Not supported model")
@@ -145,15 +158,11 @@ if args.opt == 'sgd':
 elif args.opt =='adam':
     optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=5e-4)
 
+
 strtime = get_time()
 root = 'results/' + args.workspace
 check_dir(root)
 # print(net)
-
-for name, param in net.named_parameters():
-    print(name, param.requires_grad)
-
-exit()
 
 
 for epoch in range(start_epoch, start_epoch+200):

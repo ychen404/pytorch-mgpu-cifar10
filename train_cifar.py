@@ -53,7 +53,6 @@ def parse_arguments():
     parser.add_argument('--optimizer', default='sgd')
     parser.add_argument('--two', action='store_true')
     parser.add_argument('--iid', action='store_true', help="test iid case")
-    parser.add_argument('--client_classes', default=2, type=int, help="number of classes for each client")
     parser.add_argument('--alternate', action='store_true', help="test the alternative case")
     parser.add_argument('--public_distill', action='store_true', help="use public data to distill")
     parser.add_argument('--exist_loader', action='store_true', help="there is exist loader")
@@ -256,6 +255,37 @@ def run_train(net, round, args, trainloader, testloader, worker_num, device, msg
     # save_figure(path, csv_name)
     
     logger.debug("===> BEST ACC. PERFORMANCE: %.2f%%" % (best_acc))
+
+
+def run_train_non_iid(net, round, args, trainloader, testloader, testloader_local, worker_num, device, msg):
+    """ Add this the perform extra step for local classes accuracy"""
+    
+    list_loss = []
+    strtime = get_time()
+    criterion_edge = nn.CrossEntropyLoss()
+    optimizer_edge = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+
+    csv_name = 'acc_'  + 'worker_' + str(worker_num) + '_' + strtime + '.csv'
+    csv_name_local = 'acc_'  + 'worker_' + str(worker_num) + '_' + strtime + '_' + 'local' + '.csv'
+
+    path = 'results/' + args.workspace
+        
+    for epoch in range(start_epoch, start_epoch + args.epoch):        
+        trainloss = train(epoch, round, net, criterion_edge, optimizer_edge, trainloader, device)
+        acc, best_acc = test(epoch, args, net, criterion_edge, testloader, device, msg)
+        logger.debug(f"The result is: {acc}")
+        write_csv(path, csv_name, str(acc))
+
+        acc_local, _ = test(epoch, args, net, criterion_edge, testloader_local, device, msg)
+        write_csv(path, csv_name_local, str(acc_local))
+
+        list_loss.append(trainloss)
+    # pdb.set_trace()
+    # save_figure(path, csv_name)
+    
+    logger.debug("===> BEST ACC. PERFORMANCE: %.2f%%" % (best_acc))
+
+
 
 
 def distill(epoch, edge_net, cloud_net, optimizer, trainloader, device, lambda_=1):
@@ -639,7 +669,6 @@ def distill_from_multi_workers(
                 for i, bound in enumerate(bounds):
                     # print(f"bound {bound}, target {target.item()}")
                     if int(target.item()) in bound:
-                    #    print("found")
                        out_t_temp.append (edge_nets[i](input))
                     else:
                       continue
@@ -666,11 +695,7 @@ def distill_from_multi_workers(
         #TODO: use an array of edge models instead later
         # you can use torch.zeros(128,100) to create the placeholder 
         else:
-            # out_t_0 = edge_net_0(inputs)
-            # t_max_0 = F.softmax(out_t_0 / T, dim=1)
 
-            # out_t_1 = edge_net_1(inputs)
-            # t_max_1 = F.softmax(out_t_1 / T, dim=1)
             out_t = torch.zeros((batch_size, total_classes), device=device)
             t_max = torch.zeros((batch_size, total_classes), device=device)
 
@@ -788,13 +813,6 @@ def run_concat_distill_multi(
     for edge_net in edge_nets:
         frozen_edge_net = freeze_net(edge_net)
         frozen_edge_nets.append(frozen_edge_net)
-
-    # pdb.set_trace()
-    # frozen_edge_0 = freeze_net(edge_0)
-    # frozen_edge_0 = frozen_edge_0.to(device)
-    
-    # frozen_edge_1 = freeze_net(edge_1)
-    # frozen_edge_1 = frozen_edge_1.to(device)
 
     criterion_cloud = nn.CrossEntropyLoss()
 
@@ -920,6 +938,11 @@ if __name__ == "__main__":
 
         if args.public_distill: 
             trainset_public, trainset_private = split_train_data(trainset, args.public_percent)
+            
+            # use half of the data to distill 10/01
+            # To test the performance of 25% data, the edge models are trained with 50%
+            # trainset_public, _ = split_train_data(trainset_public, args.public_percent)
+
 
         if args.split != 0 and not args.split_classes:
             logger.info(f"Using {int(args.split * 100)}% of training data, classifying all classes")
@@ -935,9 +958,17 @@ if __name__ == "__main__":
                 testloader = torch.load('testloader_first_10cls.pth')
             
             else:
+                client_classes = int(num_classes * args.split)
                 if args.public_distill and not args.iid:
-                    trainloader, testloader = get_worker_data(trainset_private, args, workerid=0)
-                
+
+                    # trainloader, testloader = get_worker_data(trainset_private, args, workerid=0)
+                    trainloaders = get_subclasses_loaders(trainset_private, args.num_workers, client_classes, num_workers=4, seed=100)
+                    # trainloader_all = get_subclasses_loaders(trainset, n_clients=1, client_classes=int(args.num_workers * args.client_classes), num_workers=4, seed=100)
+                    testloader_non_iid = get_subclasses_loaders(testset, n_clients=1, client_classes=args.num_workers * client_classes, num_workers=4, seed=100)
+                    # logger.debug(testloader_non_iid[0])
+                    testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, seed=100)
+                    trainloader_all = get_subclasses_loaders(trainset_public, n_clients=1, client_classes=args.num_workers * client_classes, num_workers=4, seed=100)
+
                 elif args.public_distill and args.iid:
                     logger.info(f"Using {int(args.split * 100)}% for iid")
                     extract_trainset = extract_classes(trainset_private, args.split, workerid=0)                    
@@ -945,13 +976,14 @@ if __name__ == "__main__":
                     trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
                     _, testloader_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
 
+
                 else:
                     # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
-                    trainloaders = get_subclasses_loaders(trainset, args.num_workers, args.client_classes, num_workers=4, seed=100)
-                    trainloader_all = get_subclasses_loaders(trainset, n_clients=1, client_classes=int(args.num_workers * args.client_classes), num_workers=4, seed=100)
+                    trainloaders = get_subclasses_loaders(trainset, args.num_workers, client_classes, num_workers=4, seed=100)
+                    trainloader_all = get_subclasses_loaders(trainset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, seed=100)
 
                     # _, testloader_non_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
-                    testloader_non_iid = get_subclasses_loaders(testset, n_clients=1, client_classes=int(args.num_workers * args.client_classes), num_workers=4, seed=100)
+                    testloader_non_iid = get_subclasses_loaders(testset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, seed=100)
 
                     # logger.debug(testloader_non_iid[0])
                     testloaders = get_subclasses_loaders(testset, args.num_workers, args.client_classes, num_workers=4, seed=100)
@@ -980,23 +1012,13 @@ if __name__ == "__main__":
                 else:
                     if args.public_distill:
                         logger.debug("In the public_distill condition")
-                        
-                        trainloader_1, testloader_1 = get_worker_data(trainset_private, args, workerid=1)
-                        trainloader_2, testloader_2 = get_worker_data(trainset_private, args, workerid=2)
-                        _, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
-                        
-                        # trainloader_public = get_loader(trainset_public, args)
-                        # trainloader_public, _ = get_worker_data_hardcode(trainset_public, 0.1, workerid=0)
-                        # the split is hardcoded for testing edge0's performance
-                        trainloader_private, _ = get_worker_data_hardcode(trainset_private, args.num_workers * args.split, workerid=0)
-                        
+                        # trainloader_private, _ = get_worker_data_hardcode(trainset_private, args.num_workers * args.split, workerid=0)
                         if args.iid:
                             trainloader_public, testloader_public = get_worker_data_hardcode(trainset_public, args.split, workerid=0)
                         
                         else:
                             trainloader_public, testloader_public = get_worker_data_hardcode(trainset_public, args.num_workers * args.split, workerid=0)
 
-                        trainloader_10cls, testloader_10cls = get_worker_data_hardcode(trainset, args.num_workers * args.split, workerid=0)
 
                     else:
                         logger.debug("In the else condition")
@@ -1102,7 +1124,8 @@ if __name__ == "__main__":
                     logger.debug(f"############# round {round} #############")
                     nets = check_model_trainable(nets)
                     for i in range(0, args.num_workers, 1):
-                        run_train(nets[i], round, args, trainloaders[i], testloader_non_iid[0], i, device, 'edge_' + str(i))
+                        run_train_non_iid(nets[i], round, args, trainloaders[i], testloader_non_iid[0], testloaders[i], i, device, 'edge_' + str(i))
+                    
                     run_concat_distill_multi(nets, cloud_net, args, trainloader_all[0], testloader_non_iid[0], worker_num=0, device=device, prefix='distill_')
 
                 exit()       

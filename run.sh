@@ -156,27 +156,32 @@
 #                 # --add_cifar10 \
 
 # non-iid
+# --workspace non_iid_public_res6_five_workers_5_cls \
+
+# --workspace non_iid_public_res6_five_workers_2_cls_public_distill_25 \
+
 split=0.02
-CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
-                --workspace two_cls_res6_four_workers_non_iid \
-                --net res6 \
+CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+                --workspace non_iid_public_res8_five_workers_2_cls_public_distill \
+                --net res8 \
                 --cloud res18 \
                 --split $split \
                 --split_classes \
                 --dataset cifar100 \
-                --num_workers 4 \
+                --num_workers 5 \
                 --num_rounds 1 \
-                --epoch 1 \
-                --cloud_epoch 2 \
+                --epoch 200 \
+                --cloud_epoch 200 \
                 --optimizer adam \
                 --cloud_lr 0.001 \
                 --lr 0.1 \
                 --lamb 1 \
                 --two \
                 --alternate \
+                --public_distill \
+                --public_percent 0.5 \
                 --selection
                 # --add_cifar10 \
-
 
 # split=0.06
 # CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \

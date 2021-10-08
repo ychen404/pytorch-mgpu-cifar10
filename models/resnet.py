@@ -171,16 +171,22 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         
         self.layer1 = self._make_layer(block, 16, layers[0])
-        self.layer2 = self._make_layer(block, 32, layers[1], stride=2)
-                    
+
         if len(layers) == 3:
+            self.layer2 = self._make_layer(block, 32, layers[1], stride=2)
             self.layer3 = self._make_layer(block, 64, layers[2], stride=2)
             self.avgpool = nn.AvgPool2d(8, stride=1)
             self.fc = nn.Linear(64 * block.expansion, num_classes)
         
-        else:
+        elif len(layers) == 2:
+            self.layer2 = self._make_layer(block, 32, layers[1], stride=2)
             self.avgpool = nn.AvgPool2d(16, stride=1)
             self.fc = nn.Linear(32 * block.expansion, num_classes)
+
+        else:
+            # layers == 1
+            self.avgpool = nn.AvgPool2d(32, stride=1)
+            self.fc = nn.Linear(16 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -212,18 +218,26 @@ class ResNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-
         x = self.layer1(x)
-        x = self.layer2(x)
+        # print(f"1: {x.shape}")
         
+        if 'layer2' in self._modules:
+            x = self.layer2(x)
+            print(f"2: {x.shape}")
+
         if 'layer3' in self._modules:
             x = self.layer3(x)
-        # pdb.set_trace()
-
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
         
+        
+        x = self.avgpool(x)
+        # print(f"3: {x.shape}")
+
+        x = x.view(x.size(0), -1)
+        # print(f"4: {x.shape}")
+
         x = self.fc(x)
+        # print(f"5: {x.shape}")
+
         
         return x
 
@@ -280,6 +294,11 @@ class PreAct_ResNet(nn.Module):
         x = self.fc(x)
 
         return x
+
+
+def resnet4(**kwargs):
+    model = ResNet(BasicBlock, [1], **kwargs)
+    return model
 
 
 def resnet6(**kwargs):
@@ -352,7 +371,7 @@ def preact_resnet1001(**kwargs):
 
 
 if __name__ == "__main__":
-    net = resnet6(num_classes=100)
+    net = resnet4(num_classes=100)
     # print(net)
     total_params = sum(p.numel() for p in net.parameters())
     layers = len(list(net.modules()))
