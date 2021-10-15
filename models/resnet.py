@@ -219,11 +219,9 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.layer1(x)
-        # print(f"1: {x.shape}")
         
         if 'layer2' in self._modules:
             x = self.layer2(x)
-            print(f"2: {x.shape}")
 
         if 'layer3' in self._modules:
             x = self.layer3(x)

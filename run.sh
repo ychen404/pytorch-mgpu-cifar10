@@ -170,8 +170,8 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
                 --dataset cifar100 \
                 --num_workers 5 \
                 --num_rounds 1 \
-                --epoch 1 \
-                --cloud_epoch 1 \
+                --epoch 200 \
+                --cloud_epoch 200 \
                 --optimizer adam \
                 --cloud_lr 0.001 \
                 --lr 0.1 \

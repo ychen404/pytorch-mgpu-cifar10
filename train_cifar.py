@@ -713,7 +713,7 @@ def distill_from_multi_workers(
                 # logger.debug(f"Weighted average")
                 # t_max = alpha * t_max_0 + beta * t_max_1
 
-        # logger.debug(f"s_max: {s_max}")    
+        # logger.debug(f"s_max: {s_max}")
         # logger.debug(f"t_max: {t_max}")
 
         loss_kd = kd_fun(s_max, t_max) / batch_size
