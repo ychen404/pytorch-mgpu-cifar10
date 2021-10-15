@@ -162,7 +162,7 @@
 
 split=0.02
 CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
-                --workspace non_iid_public_res8_five_workers_2_cls_public_distill \
+                --workspace non_iid_public_res8_five_workers_2_cls_public_distill_averaged_softmax \
                 --net res8 \
                 --cloud res18 \
                 --split $split \
@@ -170,8 +170,8 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
                 --dataset cifar100 \
                 --num_workers 5 \
                 --num_rounds 1 \
-                --epoch 200 \
-                --cloud_epoch 200 \
+                --epoch 1 \
+                --cloud_epoch 1 \
                 --optimizer adam \
                 --cloud_lr 0.001 \
                 --lr 0.1 \
@@ -179,8 +179,8 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
                 --two \
                 --alternate \
                 --public_distill \
-                --public_percent 0.5 \
-                --selection
+                --public_percent 0.5
+                # --selection
                 # --add_cifar10 \
 
 # split=0.06

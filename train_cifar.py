@@ -619,7 +619,7 @@ def distill_from_multi_workers(
     
     logger.debug('\nEpoch: %d' % epoch)
     cloud_net.train()
-    logger.debug(f"model.train={cloud_net.training}")
+    # logger.debug(f"model.train={cloud_net.training}")
     train_loss = 0
     correct = 0
     total = 0
@@ -644,7 +644,7 @@ def distill_from_multi_workers(
     logger.debug(f"Lambda: {lambda_}")
     for batch_idx, (inputs, targets) in enumerate(trainloader_concat):
         inputs, targets = inputs.to(device), targets.to(device)
-        logger.debug(f"device = {device}")
+        # logger.debug(f"device = {device}")
         alpha, beta, gamma = count_targets(targets)
         optimizer.zero_grad()
         counter += 1
@@ -705,7 +705,7 @@ def distill_from_multi_workers(
                 t_max += F.softmax(out_t / T, dim=1)
 
             if average_method == 'equal':
-                logger.debug("For iid case")
+                logger.debug("Equal weights")
                 # t_max = (t_max_0 + t_max_1 ) / 2
                 t_max = t_max / num_workers
             else: # weighted, performance is not good, not used
