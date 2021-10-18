@@ -608,14 +608,11 @@ def distill_from_multi_workers(
     num_workers,
     split,
     average_method,
+    select_mode,
     selection=False,
     use_pseudo_labels=False,
     lambda_=1,
-    )->float:
-    """ 
-    This function is a hack for using 30 classes training data for distillation
-    Here I directly use the trainloader that contains the first 30 classes, so it can only provide a baseline
-    """
+    )->float: 
     
     logger.debug('\nEpoch: %d' % epoch)
     cloud_net.train()
@@ -629,7 +626,6 @@ def distill_from_multi_workers(
 
     # consider cifar100 only for now
     total_classes = 100
-    # num_workers = 2
     worker_ids = [x for x in range(num_workers)]
     num_classes = int(split * total_classes)
     bounds = []
@@ -664,26 +660,22 @@ def distill_from_multi_workers(
                 # [3,32,32] -> [1,3,32,32]
                 input = input.unsqueeze(0)
                 
-                # bounds is the list of the lower and upper bound of each worker
-                # e.g., [[0, 1], [2, 3]]
-                for i, bound in enumerate(bounds):
-                    # print(f"bound {bound}, target {target.item()}")
-                    if int(target.item()) in bound:
-                       out_t_temp.append (edge_nets[i](input))
-                    else:
-                      continue
-                
-                # if bounds[0][0] <= target.item() <= bounds[0][1] :
-                #     # logger.debug("first worker data")
-                #     out_t_temp.append (edge_net_0(input))
-                # elif bounds[1][0] <= target.item() <= bounds[1][1] :
-                #     # logger.debug("second worker data")
-                #     out_t_temp.append (edge_net_1(input))
-                # else:
-                #     logger.debug("Should not happen")
-                #     exit()
-                # out_t_temp.append (edge_net_0(input))
-            
+                if select_mode == "guided": 
+                    # bounds is the list of the lower and upper bound of each worker
+                    # e.g., [[0, 1], [2, 3]]
+                    for i, bound in enumerate(bounds):
+                        # print(f"bound {bound}, target {target.item()}")
+                        if int(target.item()) in bound:
+                            out_t_temp.append (edge_nets[i](input))
+                        else:
+                            continue
+
+                elif select_mode == "similarity":
+                    pass
+                    
+                else:
+                    logger.debug("No select model provided")
+                    exit()
             logger.debug(f"len out_t_temp: {len(out_t_temp)}")
             out_t = torch.cat(out_t_temp, dim=0) # use dim 0 to stack the tensors
             assert out_t.shape[1] == 100, f"the shape is {out_t.shape}, should be (x, 100)"
@@ -835,6 +827,7 @@ def run_concat_distill_multi(
                                                 args.num_workers,
                                                 args.split,
                                                 average_method='equal', 
+                                                select_mode='guided',
                                                 selection=args.selection, 
                                                 use_pseudo_labels=args.use_pseudo_labels, 
                                                 lambda_=args.lamb)

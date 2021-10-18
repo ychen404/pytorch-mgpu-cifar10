@@ -162,7 +162,7 @@
 
 split=0.02
 CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
-                --workspace non_iid_public_res8_five_workers_2_cls_public_distill_averaged_softmax \
+                --workspace non_iid_public_res8_five_workers_2_cls_public_distill_similarity \
                 --net res8 \
                 --cloud res18 \
                 --split $split \
@@ -180,7 +180,7 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
                 --alternate \
                 --public_distill \
                 --public_percent 0.5
-                # --selection
+                --selection
                 # --add_cifar10 \
 
 # split=0.06
