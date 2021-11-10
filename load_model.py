@@ -16,8 +16,6 @@ import torch.nn.init as init
 import argparse
 import os
 from data_loader import extract_classes, split_train_data
-import time
-
 
 
 logger = logging.getLogger(__name__)
@@ -42,7 +40,6 @@ parser.add_argument('--opt', default='sgd')
 parser.add_argument('--workspace', default='test_workspace')
 parser.add_argument("--percent_classes", default=1, type=float, help="how many classes to classify")
 parser.add_argument("--percent_data", default=1, type=float, help="percentage of data to use for training")
-
 
 args = parser.parse_args()
 
@@ -81,23 +78,25 @@ def save_checkpoint(net, acc):
         os.mkdir(checkpoint_dir)
     torch.save(state, checkpoint_dir + 'checkpoint.pt')
 
-def test_acc(epoch):
+def test_acc():
     net.eval()
     test_loss = 0
     correct = 0
     total = 0
+    pdb.set_trace()
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
+            logger.debug(outputs)
             loss = criterion(outputs, targets)
 
             test_loss += loss.item()
             _, predicted = outputs.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
-            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
+            # progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+            #     % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
         acc = 100.*correct/total
     
@@ -108,8 +107,6 @@ def check_dir(directory):
     if not os.path.exists(directory):
         os.makedirs(directory)    
 
-
-t0 = time.time()
 print('==> Preparing data..')
 
 transform_train = transforms.Compose([
@@ -171,26 +168,24 @@ if args.opt == 'sgd':
 elif args.opt =='adam':
     optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=5e-4)
 
-t1 = time.time()
-print(f"Data time: {t1 - t0} seconds")
-t2 = time.time()
 
 strtime = get_time()
 root = 'results/' + args.workspace
 check_dir(root)
 # print(net)
 
-best_acc = 0
-for epoch in range(start_epoch, start_epoch + epoch):
-    trainloss = train(epoch)
-    acc = test_acc(epoch)
-    logger.debug(f"The result is: {acc}")
-    # write_csv('acc_' + args.workspace + '_worker_0' + 'res8_' + '.csv', str(acc))
-    write_csv('results/' + args.workspace, 'acc_' +  str(args.net) + '_' + strtime + '.csv', str(acc))
-    if acc > best_acc:
-        logger.debug(f"Saving model...")
-        save_checkpoint(net, acc)
-        best_acc = acc
-logger.debug(f"The best acc is: {acc}")
-t3 = time.time()
-print(f"Training time: {t3 - t2} seconds")
+
+# for epoch in range(start_epoch, start_epoch + epoch):
+#     trainloss = train(epoch)
+#     acc = test_acc(epoch)
+#     logger.debug(f"The result is: {acc}")
+#     # write_csv('acc_' + args.workspace + '_worker_0' + 'res8_' + '.csv', str(acc))
+#     write_csv('results/' + args.workspace, 'acc_' +  str(args.net) + '_' + strtime + '.csv', str(acc))
+# save_checkpoint(net, acc)
+
+path = 'results/res6_2cls_100_percent_save/checkpoint/checkpoint.pt'
+checkpoint = torch.load(path)
+# pdb.set_trace()
+net.load_state_dict(checkpoint['net'])
+# net.eval()
+acc = test_acc()

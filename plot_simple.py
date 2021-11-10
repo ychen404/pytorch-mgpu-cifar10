@@ -84,6 +84,8 @@ if __name__ == "__main__":
     edge_1_iid = 'results/public_percent_0.5_4_cls_adam_lambda_1_iid_public_distill_again/acc_worker_1_2021-09-15-15-50.csv'
     cloud_iid = 'results/public_percent_0.5_4_cls_adam_lambda_1_iid_public_distill_again/distill_concat_2021-09-15-15-51.csv'
 
+    centralized_res18_20cls_50pct = 'results/res18_20cls_50_percent_save/acc_res18_2021-11-05-02-45.csv'
+
     # five workers 2 cls
 
     # cloud_iid_2_cls = 'results/five_workers_iid_two_cls/distill_concat_2021-09-20-22-11.csv'
@@ -105,17 +107,19 @@ if __name__ == "__main__":
 
     
     # there might be an easier way to populate data
-    base = 'results/two_cls_res6_five_workers_non_iid/'
+    # base = 'results/two_cls_res6_five_workers_non_iid/'
+    # base = 'results/non_iid_public_res8_ten_workers_2_cls_private_distill_distill_pct_0.1/'
+    base = 'results/iid_ten_workers_res6_2_cls_public_distill/'
+
     base_public = 'results/two_cls_res6_five_workers_non_iid_public/'
     # cloud_iid_3_cls_seven = 'results/seven_workers_iid_three_cls/distill_concat_2021-09-21-17-48.csv'
     # cloud_iid_3_cls_eight = 'results/eight_workers_iid_three_cls/distill_concat_2021-09-21-17-48.csv'
 
     # cloud_iid_3_cls_oneshot = 'results/five_workers_iid_three_cls/distill_concat_2021-09-20-23-52.csv'
-    cloud = base + 'distill_2021-09-29-00-16.csv'
+    # cloud = base + 'distill_2021-09-29-00-16.csv'
+    cloud = base + 'distill_2021-11-05-04-47.csv'
 
-    resnet18_alldata = 'results/res18_10cls/acc_res18_2021-09-29-00-17.csv'
-    resnet18_halfdata = 'results/res18_10cls_50_percent/acc_res18_2021-10-01-17-52.csv'
-
+    fd_with_pub = 'results/two_cls_res6_five_workers_non_iid_public/distill_2021-09-29-16-27.csv'
     cloud_pub = base_public + 'distill_2021-09-29-16-27.csv'
     cloud_10_workers = 'results/non_iid_public_res6_ten_workers_2_cls_public_distill/distill_2021-10-04-06-42.csv'
     cloud_15_workers = 'results/non_iid_public_res6_fifteen_workers_2_cls_public_distill/distill_2021-10-04-07-23.csv'
@@ -145,21 +149,27 @@ if __name__ == "__main__":
     hundred_pcnt = 'results/res6_2cls_100_percent/acc_res6_2021-09-29-05-23.csv'
 
 
-    # finetune = base + 'acc_worker_9_2021-09-27-18-05.csv'
-    # FD_bound = 'results/res18_20cls/acc_res18_2021-09-27-19-16.csv'
-    # FedAvg_bound = 'results/res6_20cls/acc_res6_2021-09-27-19-16.csv'
-    
-    # edge_5_3_cls = base + 'acc_worker_5.csv'
-    
-    # edge_6_3_cls = base + 'acc_worker_6_2021-09-21-17-45.csv'
-    # edge_7_3_cls = base + 'acc_worker_7_2021-09-21-17-46.csv'
-    
     #cat acc.csv | awk {'print $1'} | sed 's/,//' > acc_parsed.csv
     fedavg_2cls_200round = '/home/users/yitao/Code/python-socket-FL/' + \
                 'results/cifar100_iid_five_worker_fedavg_2cls_200rounds_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
 
     fedavg_2cls_noniid_200round = '/home/users/yitao/Code/python-socket-FL/' + \
                 'results/cifar100_non_iid_five_worker_fedavg_2cls_200rounds_resnet6_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
+
+    fedavg_2cls_noniid_200round_10worker = '/home/users/yitao/Code/python-socket-FL/' + \
+                'results/cifar100_non_iid_ten_worker_fedavg_2cls_200rounds_resnet6_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
+
+    fedavg_2cls_iid_200round_10worker = '/home/users/yitao/Code/python-socket-FL/' + \
+                'results/cifar100_iid_ten_worker_fedavg_2cls_200rounds_resnet6_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
+
+    fedavg_2cls_iid_200round_15worker = '/home/users/yitao/Code/python-socket-FL/' + \
+                'results/cifar100_iid_15_worker_fedavg_2cls_200rounds_resnet6_localep_1_eps_1_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
+
+    fedavg_2cls_iid_200round_10worker_1_localep = '/home/users/yitao/Code/python-socket-FL/' + \
+                'results/cifar100_iid_ten_worker_fedavg_2cls_200rounds_resnet6_localep_1_eps_1_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
+    
+    fedavg_2cls_iid_200round_5worker = '/home/users/yitao/Code/python-socket-FL/' + \
+                'results/cifar100_iid_ten_worker_fedavg_2cls_200rounds_resnet6_localep_1_eps_1_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
 
     fedavg_3_cls_200round = '/home/users/yitao/Code/python-socket-FL/' + \
                 'results/cifar100_iid_six_worker_fedavg_3cls_200rounds_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
@@ -186,13 +196,70 @@ if __name__ == "__main__":
                 'results/cifar100_iid_five_worker_fedavg_20cls_200rounds_resnet6_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
 
 
+    distill_5_pct = 'results/non_iid_public_res8_five_workers_2_cls_public_distill_distill_pct_0.05/distill_2021-10-28-19-18.csv'
+    distill_10_pct = 'results/non_iid_public_res8_five_workers_2_cls_public_distill_distill_pct_0.1/distill_2021-10-28-19-15.csv'
+    distill_20_pct = 'results/non_iid_public_res8_five_workers_2_cls_public_distill_distill_pct_0.2/distill_2021-10-28-19-15.csv'
+    distill_30_pct = 'results/non_iid_public_res8_five_workers_2_cls_public_distill_distill_pct_0.3/distill_2021-10-28-19-15.csv'
+    distill_40_pct = 'results/non_iid_public_res8_five_workers_2_cls_public_distill_distill_pct_0.4/distill_2021-10-28-19-22.csv'
+
+    # private_distill_10_pct = 'results/non_iid_public_res8_five_workers_2_cls_private_distill_distill_pct_0.1/distill_2021-10-28-23-03.csv'
+    # private_distill_20_pct = 'results/non_iid_public_res8_five_workers_2_cls_private_distill_distill_pct_0.2/distill_2021-10-28-22-59.csv'
+    # private_distill_30_pct = 'results/non_iid_public_res8_five_workers_2_cls_private_distill_distill_pct_0.3/distill_2021-10-28-22-59.csv'
+    # private_distill_40_pct = 'results/non_iid_public_res8_five_workers_2_cls_private_distill_distill_pct_0.4/distill_2021-10-28-23-07.csv'
+
+    private_distill_10_pct = 'results/non_iid_public_res8_ten_workers_2_cls_private_distill_distill_pct_0.1/distill_2021-11-01-23-02.csv'
+    private_distill_20_pct = 'results/non_iid_public_res8_ten_workers_2_cls_private_distill_distill_pct_0.2/distill_2021-11-01-22-59.csv'
+    private_distill_30_pct = 'results/non_iid_public_res8_ten_workers_2_cls_private_distill_distill_pct_0.3/distill_2021-11-03-02-35.csv'
+    private_distill_40_pct = 'results/non_iid_public_res8_ten_workers_2_cls_private_distill_distill_pct_0.4/distill_2021-11-03-02-32.csv'
+
+    iid_15_workers = 'results/iid_15_workers_res6_2_cls_public_distill/distill_2021-11-08-06-14.csv'
+    iid_5_workers = 'results/iid_5_workers_res6_2_cls_public_distill/distill_2021-11-08-23-41.csv'
+    iid_5_workers_lambda_05 = 'results/iid_5_workers_res6_2_cls_public_distill_lamb_0.5/distill_2021-11-09-03-57.csv'
+
     # data_to_plot['Federated Distillation (res18, private, 100%data, 10cls)'] = collect_data(cloud)
-    data_to_plot['Centralized '] = collect_data(resnet18_alldata)
-    data_to_plot['Federated Distillation'] = collect_data(cloud_pub)
-    data_to_plot['FedAvg'] = collect_data(fedavg_2cls_noniid_200round)
+    # data_to_plot['Centralized '] = collect_data(resnet18_alldata)
+    # data_to_plot['Federated Distillation'] = collect_data(cloud_pub)
+    # data_to_plot['100% public data to distill'] = collect_data(fd_with_pub)
+    
+    # data_to_plot['2.5% data distill'] = collect_data(cloud)
+
+
+    # data_to_plot['10% public data to distill'] = collect_data(distill_10_pct)
+    # data_to_plot['FedAvg'] = collect_data(fedavg_2cls_noniid_200round)
+    # data_to_plot['20% public data to distill'] = collect_data(distill_20_pct)
+    # data_to_plot['30% public data to distill'] = collect_data(distill_30_pct)
+    # data_to_plot['40% public data to distill'] = collect_data(distill_40_pct)
+
+    # data_to_plot['2.5% private distill'] = collect_data(cloud)
+
+    # 10 edge worker use private data to distill
+    # data_to_plot['10% private data to distill'] = collect_data(private_distill_10_pct)
+    # data_to_plot['20% private data to distill'] = collect_data(private_distill_20_pct)
+    # data_to_plot['30% private data to distill'] = collect_data(private_distill_30_pct)
+    # data_to_plot['FedAvg'] = collect_data(fedavg_2cls_noniid_200round_10worker)   
+    # data_to_plot['40% private data to distill'] = collect_data(private_distill_40_pct)
+
+    # data_to_plot['40% private data to distill'] = collect_data(private_distill_40_pct)
+
+
     # data_to_plot['Centralized (res18, 50%data, 10cls)'] = collect_data(resnet18_halfdata)
     # data_to_plot['Federated Distillation (res18, public, 25%data, 10cls)'] = collect_data(cloud_25_pcnt)
-    # data_to_plot['Federated Distillation (res18, public, 50%data, 20cls) 10 workers'] = collect_data(cloud_10_workers)
+    # previous non iid case 
+    # data_to_plot['Federated Distillation (res18, 100%public data, 20cls)'] = collect_data(cloud_10_workers)
+    # data_to_plot['FedAvg (res6, 100%private data, 20cls)'] = collect_data(fedavg_2cls_noniid_200round_10worker)
+    # data_to_plot['Centralized (res18, 50%data, 20cls'] = collect_data(centralized_res18_20cls_50pct)
+
+    # iid case
+    data_to_plot['Federated Distillation (res18, iid, 100%public data, 20cls)'] = collect_data(cloud)
+    data_to_plot['FedAvg (res6, iid, 100%private data, 20cls)'] = collect_data(fedavg_2cls_iid_200round_10worker)
+    # data_to_plot['FedAvg (res6, iid, 100%private data, 20cls, 1local_ep)'] = collect_data(fedavg_2cls_iid_200round_10worker_1_localep)
+    data_to_plot['Federated Distillation (res18, iid, 100%public data, 30cls)'] = collect_data(iid_15_workers)
+    data_to_plot['FedAvg (res6, iid, 100%private data, 30cls, 1local_ep)'] = collect_data(fedavg_2cls_iid_200round_15worker)
+    data_to_plot['Federated Distillation (res18, iid, 100%public data, 10cls)'] = collect_data(iid_5_workers)
+    # data_to_plot['Federated Distillation (res18, iid, 100%public data, 10cls, co-train)'] = collect_data(iid_5_workers_lambda_05)
+    data_to_plot['FedAvg (res6, iid, 100%private data, 10cls)'] = collect_data(fedavg_2cls_iid_200round_5worker)
+
+
     # data_to_plot['Federated Distillation (res18, public, 50%data, 30cls) 15 workers'] = collect_data(cloud_15_workers)
     
     # data_to_plot['Edge 0 Global'] = collect_data(edge_0)
@@ -222,7 +289,9 @@ if __name__ == "__main__":
     # data_to_plot['100% training data'] = collect_data(hundred_pcnt)
     
     # plot normal
-    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', '', output= base  + 'cloud_with_fedavg_reduced.png')
+    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', '', output= base  + 'iid_partial_distill.png')
+    # plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', '', output= 'results/non_iid_public_res6_ten_workers_2_cls_public_distill/'  + 'partial_distill.png')
+
     # plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', '', output='results/non_iid_public_res6_ten_workers_2_cls_public_distill/' + 'cloud_with_fedavg.png')
 
     # plot accuracy development

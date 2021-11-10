@@ -60,6 +60,7 @@ def parse_arguments():
     parser.add_argument('--alpha', default=100, type=float, help='alpha for iid setting')
     parser.add_argument('--lamb', default=0.5, type=float, help='lambda for distillation')
     parser.add_argument('--public_percent', default=0.5, type=float, help='percentage training data to be public')
+    parser.add_argument('--distill_percent', default=1, type=float, help='percentage of public data use for distillation')
     parser.add_argument('--selection', action='store_true', help="enable selection method")
     parser.add_argument('--use_pseudo_labels', action='store_true', help="enable selection method")
     parser.add_argument('--add_cifar10', action='store_true', help="add cifar10 to distillation")
@@ -284,7 +285,6 @@ def run_train_non_iid(net, round, args, trainloader, testloader, testloader_loca
     # save_figure(path, csv_name)
     
     logger.debug("===> BEST ACC. PERFORMANCE: %.2f%%" % (best_acc))
-
 
 
 
@@ -926,16 +926,23 @@ if __name__ == "__main__":
     else:
         logger.info('==> CIFAR-100')
         trainset, testset = get_cifar100()
-
         transform_test = get_cifar100_transfromtest()
 
         if args.public_distill: 
             trainset_public, trainset_private = split_train_data(trainset, args.public_percent)
+
+            # Use 10% of the public dataset
+            if args.distill_percent != 1:
+                # use partial public data to distill
+                # trainset_public, _ = split_train_data(trainset_public, args.distill_percent)
+                
+                # use partial private data to distill
+                trainset_public, _ = split_train_data(trainset_private, args.distill_percent)
+
             
             # use half of the data to distill 10/01
             # To test the performance of 25% data, the edge models are trained with 50%
             # trainset_public, _ = split_train_data(trainset_public, args.public_percent)
-
 
         if args.split != 0 and not args.split_classes:
             logger.info(f"Using {int(args.split * 100)}% of training data, classifying all classes")
@@ -979,7 +986,7 @@ if __name__ == "__main__":
                     testloader_non_iid = get_subclasses_loaders(testset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, seed=100)
 
                     # logger.debug(testloader_non_iid[0])
-                    testloaders = get_subclasses_loaders(testset, args.num_workers, args.client_classes, num_workers=4, seed=100)
+                    testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, seed=100)
 
             if args.save_loader:
                 torch.save(trainloader, 'trainloader_first_10cls.pth')
@@ -1113,12 +1120,25 @@ if __name__ == "__main__":
             else:
                 # non-iid here
                 logger.debug(30*'*' + 'Non-iid' + 30*'*')
+                
+
+                logger.debug("Prepare cifar10 as public data")
+                trainloader_cifar10, testloader_cifar10 = get_cifar10_loader(args)
+                similarity_index = []
+
                 for round in range(args.num_rounds):        
                     logger.debug(f"############# round {round} #############")
                     nets = check_model_trainable(nets)
                     for i in range(0, args.num_workers, 1):
                         run_train_non_iid(nets[i], round, args, trainloaders[i], testloader_non_iid[0], testloaders[i], i, device, 'edge_' + str(i))
-                    
+                        
+                        # loop over cifar10
+                        # each image calculate similarity against each image in private dataset
+                        # sum up the similarity and divided by the number of private images
+                        # iterate over all the public data 
+                        # calculate the total similarity
+                        # similarity_index.append()
+
                     run_concat_distill_multi(nets, cloud_net, args, trainloader_all[0], testloader_non_iid[0], worker_num=0, device=device, prefix='distill_')
 
                 exit()       
