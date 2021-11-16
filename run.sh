@@ -206,8 +206,11 @@
 
 # IID
 split=0.1
+# --workspace iid_5_workers_res6_2_cls_public_distill_lambda_0.5_10_pcnt_distill \
+# iid_5_workers_res6_2_cls_public_distill_dynamic_lambda_10_pcnt_distill
+
 CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
-                --workspace iid_5_workers_res6_2_cls_public_distill \
+                --workspace iid_5_workers_res6_2_cls_public_distill_dynamic_lambda_50_pcnt_distill_again \
                 --net res6 \
                 --cloud res18 \
                 --split $split \
@@ -220,11 +223,37 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
                 --optimizer adam \
                 --cloud_lr 0.001 \
                 --lr 0.1 \
-                --lamb 1 \
+                --lamb 0.5 \
                 --iid \
                 --two \
                 --alternate \
                 --public_distill \
+                --distill_percent 0.1 \
                 --public_percent 0.5
-                # --selection
-                # --add_cifar10 \
+
+# iid with finetune cloud model
+# --workspace iid_5_workers_res6_2_cls_public_distill_finetune_50eps_all_publicdata \
+# split=0.1
+# CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+#                 --workspace iid_5_workers_res6_2_cls_public_distill_finetune_alllayers_50eps_all_publicdata \
+#                 --net res6 \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --dataset cifar100 \
+#                 --num_workers 5 \
+#                 --num_rounds 1 \
+#                 --epoch 200 \
+#                 --cloud_epoch 200 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --iid \
+#                 --two \
+#                 --alternate \
+#                 --public_distill \
+#                 --public_percent 0.5 \
+#                 --finetune \
+#                 --finetune_epoch 50 \
+#                 --finetune_percent 1

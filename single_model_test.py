@@ -30,7 +30,7 @@ logger.addHandler(c_handler)
 c_format = logging.Formatter(fmt_str)
 c_handler.setFormatter(c_format)
 
-epoch=2
+epoch=200
 batch_size=128
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 start_epoch=0

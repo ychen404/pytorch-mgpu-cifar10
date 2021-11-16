@@ -65,6 +65,8 @@ def parse_arguments():
     parser.add_argument('--use_pseudo_labels', action='store_true', help="enable selection method")
     parser.add_argument('--add_cifar10', action='store_true', help="add cifar10 to distillation")
     parser.add_argument('--finetune', action='store_true', help="finetune the cloud model")
+    parser.add_argument('--finetune_epoch', default=10, type=int, help='number of epochs for finetune')
+    parser.add_argument('--finetune_percent', default=0.2, type=float, help='percentage of data to finetune')
 
 
     args = parser.parse_args()
@@ -102,10 +104,15 @@ def freeze_except_last_layer(net):
 
     return net
 
+def print_layers(net):
+    for name, param in net.named_parameters():
+        print(name, param.requires_grad)
+    
 # Training
 def train(epoch, round, net, criterion, optimizer, trainloader, device):
     logger.debug('\nEpoch: %d' % epoch)
     net.train()
+    # print_layers(net)
     train_loss = 0
     correct = 0
     total = 0
@@ -127,7 +134,6 @@ def train(epoch, round, net, criterion, optimizer, trainloader, device):
             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
     
     return train_loss/(batch_idx+1)
-
 
 def test(epoch, args, net, criterion, testloader, device, msg, save_checkpoint=True):
 
@@ -179,7 +185,7 @@ def test(epoch, args, net, criterion, testloader, device, msg, save_checkpoint=T
     return acc, best_acc
         
 
-def build_model_from_name(name, num_classes):
+def build_model_from_name(name, num_classes, device):
 
     print(name, type(name))
     print(name == 'res8')
@@ -244,14 +250,43 @@ def run_train(net, round, args, trainloader, testloader, worker_num, device, msg
 
     csv_name = 'acc_'  + 'worker_' + str(worker_num) + '_' + strtime + '.csv'
     path = 'results/' + args.workspace
-        
-    for epoch in range(start_epoch, start_epoch + args.epoch):        
+    
+    # end_epoch = args.finetune_epoch if args.finetune else args.epoch
+    # print(end_epoch)
+    for epoch in range(start_epoch, start_epoch + args.epoch):
+    # for epoch in range(start_epoch, start_epoch + end_epoch):
         trainloss = train(epoch, round, net, criterion_edge, optimizer_edge, trainloader, device)
         acc, best_acc = test(epoch, args, net, criterion_edge, testloader, device, msg)
         logger.debug(f"The result is: {acc}")
         # write_csv('acc_' + args.workspace + '_worker_' + str(worker_num) + '_' + strtime + '.csv', str(acc))
         write_csv(path, csv_name, str(acc))
         list_loss.append(trainloss)
+    # pdb.set_trace()
+    # save_figure(path, csv_name)
+    
+    logger.debug("===> BEST ACC. PERFORMANCE: %.2f%%" % (best_acc))
+
+def run_finetune(net, round, args, trainloader, testloader, device, msg):
+    
+    """
+    This is a copy of the run_train function, only changing the args.epoch to args.finetune_epoch
+    It is quite redundant, but I don't want to mess up with the training epochs
+    """
+    
+    list_loss = []
+    criterion_edge = nn.CrossEntropyLoss()
+    optimizer_edge = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+
+    csv_name = 'cloud_finetune.csv'
+    path = 'results/' + args.workspace
+
+    for epoch in range(start_epoch, start_epoch + args.finetune_epoch):
+        trainloss = train(epoch, round, net, criterion_edge, optimizer_edge, trainloader, device)
+        acc, best_acc = test(epoch, args, net, criterion_edge, testloader, device, msg)
+        logger.debug(f"The result is: {acc}")
+        write_csv(path, csv_name, str(acc))
+        list_loss.append(trainloss)
+
     # pdb.set_trace()
     # save_figure(path, csv_name)
     
@@ -607,6 +642,7 @@ def distill_from_multi_workers(
     device,
     num_workers,
     split,
+    distill_percent, 
     average_method,
     select_mode,
     selection=False,
@@ -659,7 +695,6 @@ def distill_from_multi_workers(
                 # need to use unsqueeze to change a 3-dimensional image to 4-dimensional
                 # [3,32,32] -> [1,3,32,32]
                 input = input.unsqueeze(0)
-                
                 if select_mode == "guided": 
                     # bounds is the list of the lower and upper bound of each worker
                     # e.g., [[0, 1], [2, 3]]
@@ -676,6 +711,7 @@ def distill_from_multi_workers(
                 else:
                     logger.debug("No select model provided")
                     exit()
+
             logger.debug(f"len out_t_temp: {len(out_t_temp)}")
             out_t = torch.cat(out_t_temp, dim=0) # use dim 0 to stack the tensors
             assert out_t.shape[1] == 100, f"the shape is {out_t.shape}, should be (x, 100)"
@@ -717,6 +753,13 @@ def distill_from_multi_workers(
             loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd + 0.5 * loss_sd
 
         else:
+            # loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
+            # mix the batch of labeled and unlabeled data (11/16)
+            if batch_idx <= len(trainloader_concat) * distill_percent:
+                lambda_ = 1
+            else:
+                lambda_ = 0.75
+
             loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
 
         loss_kd.backward()
@@ -826,6 +869,7 @@ def run_concat_distill_multi(
                                                 device, 
                                                 args.num_workers,
                                                 args.split,
+                                                args.distill_percent,
                                                 average_method='equal', 
                                                 select_mode='guided',
                                                 selection=args.selection, 
@@ -933,16 +977,13 @@ if __name__ == "__main__":
 
             # Use 10% of the public dataset
             if args.distill_percent != 1:
+                
+                # do notthing for now (moved insided the distillation function)
+                logger.info(f"The distill percent is {args.distill_percent}")
                 # use partial public data to distill
                 # trainset_public, _ = split_train_data(trainset_public, args.distill_percent)
-                
                 # use partial private data to distill
-                trainset_public, _ = split_train_data(trainset_private, args.distill_percent)
-
-            
-            # use half of the data to distill 10/01
-            # To test the performance of 25% data, the edge models are trained with 50%
-            # trainset_public, _ = split_train_data(trainset_public, args.public_percent)
+                # trainset_public, _ = split_train_data(trainset_private, args.distill_percent)
 
         if args.split != 0 and not args.split_classes:
             logger.info(f"Using {int(args.split * 100)}% of training data, classifying all classes")
@@ -971,11 +1012,10 @@ if __name__ == "__main__":
 
                 elif args.public_distill and args.iid:
                     logger.info(f"Using {int(args.split * 100)}% for iid")
-                    extract_trainset = extract_classes(trainset_private, args.split, workerid=0)                    
+                    extract_trainset = extract_classes(trainset_private, args.split, workerid=0)
                     # use 1 thread worker instead of 4 in the single gpu case
                     trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
                     _, testloader_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
-
 
                 else:
                     # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
@@ -1074,10 +1114,10 @@ if __name__ == "__main__":
 
     nets = []
     for i in range(args.num_workers):
-        net = build_model_from_name(args.net, num_classes)
+        net = build_model_from_name(args.net, num_classes, device)
         nets.append(net)
 
-    cloud_net = build_model_from_name(args.cloud, num_classes)
+    cloud_net = build_model_from_name(args.cloud, num_classes, device)
 
     if not args.alternate: # if not alternate, then perform sequential distillation
         if args.resume:
@@ -1108,19 +1148,26 @@ if __name__ == "__main__":
                     logger.debug("Distilling with public data")
                     run_concat_distill_multi(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device, prefix='distill_')
 
+                    if args.finetune:
+                        # cloud_net = freeze_except_last_layer(cloud_net)
+                        trainset_finetune, _ = split_train_data(trainset_public, args.finetune_percent)
+                        finetune_loader = get_loader(trainset_finetune, args)
+                        
+                        run_finetune(cloud_net, 0, args, finetune_loader, testloader_public, device, 'cloud_finetune')
+                        
+
                 if args.add_cifar10:
                     logger.debug("Use cifar10 to distill again")
                     trainloader_cifar10, testloader_cifar10 = get_cifar10_loader(args)
                     run_concat_distill_multi(nets, cloud_net, args, trainloader_cifar10, testloader_public, worker_num=0, device=device, prefix='cifar10_')
                 
-                if args.finetune:
-                    cloud_net = freeze_except_last_layer(cloud_net)
-                    run_train(cloud_net, 0, args, trainloader_public, testloader_public, 9, device, 'cloud_finetune')
+                # if args.finetune:
+                #     cloud_net = freeze_except_last_layer(cloud_net)
+                #     run_train(cloud_net, 0, args, trainloader_public, testloader_public, 9, device, 'cloud_finetune')
 
             else:
                 # non-iid here
                 logger.debug(30*'*' + 'Non-iid' + 30*'*')
-                
 
                 logger.debug("Prepare cifar10 as public data")
                 trainloader_cifar10, testloader_cifar10 = get_cifar10_loader(args)
