@@ -210,7 +210,7 @@ split=0.1
 # iid_5_workers_res6_2_cls_public_distill_dynamic_lambda_10_pcnt_distill
 
 CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
-                --workspace iid_5_workers_res6_2_cls_public_distill_dynamic_lambda_50_pcnt_distill_again \
+                --workspace iid_5_workers_res6_2_cls_public_distill_dynamic_lambda_0_1_25_pcnt_distill_alter \
                 --net res6 \
                 --cloud res18 \
                 --split $split \
@@ -228,7 +228,7 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
                 --two \
                 --alternate \
                 --public_distill \
-                --distill_percent 0.1 \
+                --distill_percent 0.25 \
                 --public_percent 0.5
 
 # iid with finetune cloud model

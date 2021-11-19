@@ -15,9 +15,8 @@ import math
 import torch.nn.init as init
 import argparse
 import os
-from data_loader import extract_classes, split_train_data
+from data_loader import extract_classes, split_train_data, get_dirichlet_loaders
 import time
-
 
 
 logger = logging.getLogger(__name__)
@@ -128,17 +127,20 @@ trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=Tru
 testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
 length = len(trainset)
 
-
 if args.percent_classes != 1:
     trainset = extract_classes(trainset, args.percent_classes, workerid=0)
     testset = extract_classes(testset, args.percent_classes, workerid=0)
     
     if args.percent_data != 1:
-        trainset, part_b = split_train_data(trainset, args.percent_data)
-        target_length = int(length * args.percent_classes * args.percent_data)
-        assert len(trainset) == target_length, f"Wrong target length. trainset: {len(trainset)} target: {target_length}"
+        trainloaders = get_dirichlet_loaders(trainset, n_clients=int(1/args.percent_data), alpha=100)
+        trainloader = trainloaders[0]
+        # trainset, part_b = split_train_data(trainset, args.percent_data)
+        # target_length = int(length * args.percent_classes * args.percent_data)
+        # assert len(trainset) == target_length, f"Wrong target length. trainset: {len(trainset)} target: {target_length}"
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=4)
+    else:
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=4)
+
 testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False, num_workers=4)
 
 print('==> Building model..')

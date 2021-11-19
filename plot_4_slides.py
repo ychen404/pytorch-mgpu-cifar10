@@ -49,11 +49,11 @@ def plot(y_axis, xlabel=None, ylabel=None, title=None, set_color='r', output='re
     
     for k, v in y_axis.items():
         if 'Distillation' in k and 'unlabeled' not in k:
-            ax.plot(x_axis, v, next(linecycler), label=k, color='maroon')
+            ax.plot(x_axis, v, next(linecycler), label=k, color='#8C1D40')
         elif 'FedAvg' in k:
             ax.plot(x_axis, v, next(linecycler), label=k, color='mediumblue')
         else:
-            ax.plot(x_axis, v, next(linecycler), label=k, color='orange')
+            ax.plot(x_axis, v, next(linecycler), label=k, color='darkgreen')
     
     # box = ax.get_position()
     # ax.set_position([box.x0, box.y0, box.width, box.height])
@@ -90,6 +90,11 @@ if __name__ == "__main__":
     cloud_iid = 'results/public_percent_0.5_4_cls_adam_lambda_1_iid_public_distill_again/distill_concat_2021-09-15-15-51.csv'
 
     centralized_res18_20cls_50pct = 'results/res18_20cls_50_percent_save/acc_res18_2021-11-05-02-45.csv'
+    centralized_res18_10cls_50pct = 'results/res18_10cls_50_percent_again/acc_res18_2021-11-18-19-22.csv'
+    centralized_res18_10cls_25pct = 'results/res18_10cls_25_percent/acc_res18_2021-10-01-18-02.csv'
+    centralized_res18_10cls_1_25pct = 'results/res18_10cls_12.5_percent/acc_res18_2021-11-18-19-23.csv'
+    # centralized_res18_10cls_1_25pct = 'results/res18_10cls_12.5_percent_dirichlet/acc_res18_2021-11-18-20-00.csv'
+
 
     # five workers 2 cls
 
@@ -100,17 +105,7 @@ if __name__ == "__main__":
     # edge_3_2_cls = 'results/five_workers_iid_two_cls/acc_worker_3_2021-09-20-22-08.csv'
     # edge_4_2_cls = 'results/five_workers_iid_two_cls/acc_worker_4_2021-09-20-22-10.csv'
 
-    # six workers
-
-    # cloud_iid_3_cls = 'results/five_workers_iid_three_cls_res6/distill_concat_2021-09-22-20-26.csv'
-    # edge_0_3_cls = 'results/five_workers_iid_three_cls_res6/acc_worker_0_2021-09-22-20-19.csv'
-    # edge_1_3_cls = 'results/five_workers_iid_three_cls_res6/acc_worker_1_2021-09-22-20-21.csv'
-    # edge_2_3_cls = 'results/five_workers_iid_three_cls_res6/acc_worker_2_2021-09-22-20-22.csv'
-    # edge_3_3_cls = 'results/five_workers_iid_three_cls_res6/acc_worker_3_2021-09-22-20-23.csv'
-    # edge_4_3_cls = 'results/five_workers_iid_three_cls_res6/acc_worker_4_2021-09-22-20-25.csv'
-    # edge_5_3_cls = 'results/six_workers_iid_three_cls/acc_worker_5_2021-09-21-00-07.csv'
-
-    
+   
     # there might be an easier way to populate data
     # base = 'results/two_cls_res6_five_workers_non_iid/'
     # base = 'results/non_iid_public_res8_ten_workers_2_cls_private_distill_distill_pct_0.1/'
@@ -233,15 +228,19 @@ if __name__ == "__main__":
     iid_5_workers_lambda_05_30pcnt = 'results/iid_5_workers_res6_2_cls_public_distill_lambda_0.5_30_pcnt_distill/distill_2021-11-15-15-54.csv'
     iid_5_workers_lambda_05_10pcnt = 'results/iid_5_workers_res6_2_cls_public_distill_lambda_0.5_10_pcnt_distill/distill_2021-11-15-15-55.csv'
 
+    iid_5_workers_dynamic_lambda_50pcnt_alter = 'results/iid_5_workers_res6_2_cls_public_distill_dynamic_lambda_025_1_50_pcnt_distill_alter/distill_2021-11-17-23-46.csv'
+    iid_5_workers_dynamic_lambda_25pcnt_alter = 'results/iid_5_workers_res6_2_cls_public_distill_dynamic_lambda_025_1_25_pcnt_distill_alter/distill_2021-11-17-23-45.csv'
 
-    iid_5_workers_dynamic_lambda_10pcnt = 'results/iid_5_workers_res6_2_cls_public_distill_dynamic_lambda_10_pcnt_distill/distill_2021-11-16-16-27.csv'
+    iid_5_workers_dynamic_lambda_50pcnt_alter_01 = 'results/iid_5_workers_res6_2_cls_public_distill_dynamic_lambda_0_1_50_pcnt_distill_alter/distill_2021-11-17-23-50.csv'
+    iid_5_workers_dynamic_lambda_25pcnt_alter_01 = 'results/iid_5_workers_res6_2_cls_public_distill_dynamic_lambda_0_1_25_pcnt_distill_alter/distill_2021-11-18-00-06.csv'
+
+
     # data_to_plot['Federated Distillation (res18, private, 100%data, 10cls)'] = collect_data(cloud)
     # data_to_plot['Centralized '] = collect_data(resnet18_alldata)
     # data_to_plot['Federated Distillation'] = collect_data(cloud_pub)
     # data_to_plot['100% public data to distill'] = collect_data(fd_with_pub)
     
     # data_to_plot['2.5% data distill'] = collect_data(cloud)
-
 
     # data_to_plot['10% public data to distill'] = collect_data(distill_10_pct)
     # data_to_plot['FedAvg'] = collect_data(fedavg_2cls_noniid_200round)
@@ -252,17 +251,14 @@ if __name__ == "__main__":
     # data_to_plot['2.5% private distill'] = collect_data(cloud)
 
     ####### 10 edge worker use private data to distill
-    # data_to_plot['Federated Distillation (10% shared data)'] = collect_data(private_distill_10_pct)
-    # data_to_plot['Federated Distillation (20% shared data)'] = collect_data(private_distill_20_pct)
-    # data_to_plot['Federated Distillation (30% shared data)'] = collect_data(private_distill_30_pct)
-    # data_to_plot['Federated Distillation (40% shared data)'] = collect_data(private_distill_40_pct)
-    # data_to_plot['FedAvg'] = collect_data(fedavg_2cls_noniid_200round_10worker)   
-    # data_to_plot['Centralized (res18, 50%data, 20cls)'] = collect_data(centralized_res18_20cls_50pct)
-
+    data_to_plot['Federated Distillation (10% shared data)'] = collect_data(private_distill_10_pct)
+    data_to_plot['Federated Distillation (20% shared data)'] = collect_data(private_distill_20_pct)
+    data_to_plot['Federated Distillation (30% shared data)'] = collect_data(private_distill_30_pct)
+    data_to_plot['Federated Distillation (40% shared data)'] = collect_data(private_distill_40_pct)
+    data_to_plot['FedAvg'] = collect_data(fedavg_2cls_noniid_200round_10worker)   
+    data_to_plot['Centralized (res18, 50%data, 20cls)'] = collect_data(centralized_res18_20cls_50pct)
 
     # data_to_plot['40% private data to distill'] = collect_data(private_distill_40_pct)
-
-
     # data_to_plot['Centralized (res18, 50%data, 10cls)'] = collect_data(resnet18_halfdata)
     # data_to_plot['Federated Distillation (res18, public, 25%data, 10cls)'] = collect_data(cloud_25_pcnt)
 
@@ -290,8 +286,6 @@ if __name__ == "__main__":
     # data_to_plot['1'] = collect_data(edge_1_2_cls)
     # data_to_plot['2'] = collect_data(edge_2_2_cls)
 
-
-
     ########## iid case
     # data_to_plot['Federated Distillation (res18, iid, 100%public data, 10cls)'] = collect_data(iid_5_workers)
     # data_to_plot['Federated Distillation (res18, iid, 100%public data, 20cls)'] = collect_data(cloud)
@@ -299,26 +293,28 @@ if __name__ == "__main__":
 
     # data_to_plot['FedAvg (res6, iid, 100%private data, 10cls)'] = collect_data(fedavg_2cls_iid_200round_5worker_again)
     # data_to_plot['FedAvg (res6, iid, 100%private data, 20cls)'] = collect_data(fedavg_2cls_iid_200round_10worker)
-
     # data_to_plot['FedAvg (res6, iid, 100%private data, 30cls)'] = collect_data(fedavg_2cls_iid_200round_15worker)
     
-
-    ########## iid case lambda 0.5
+    ########## iid case lambda 0.5 and dynamic case
     # iid_5_workers_res6_2_cls_public_distill_lambda_0.5_50_pcnt_distill
-    data_to_plot['Federated Distillation (res18, iid, 100% public data, lambda 0.5, 10cls)'] = collect_data(iid_5_workers_lambda_05_100pcnt)
+    # data_to_plot['Federated Distillation (res18, iid, 100% public data, lambda 0.5, 10cls)'] = collect_data(iid_5_workers_lambda_05_100pcnt)
     # data_to_plot['Federated Distillation (res18, iid, 50% public data, lambda 0.5, 10cls)'] = collect_data(iid_5_workers_lambda_05_50pcnt)
     # data_to_plot['Federated Distillation (res18, iid, 30% public data, lambda 0.5, 10cls)'] = collect_data(iid_5_workers_lambda_05_30pcnt)
     # data_to_plot['Federated Distillation (res18, iid, 10% public data, lambda 0.5, 10cls)'] = collect_data(iid_5_workers_lambda_05_10pcnt)
-    data_to_plot['Federated Distillation (res18, iid, 100% public data, unlabeled, 10cls)'] = collect_data(iid_5_workers)
-    data_to_plot['Federated Distillation (res18, iid, dynamic lambda(0.75, 1) 10%public data, 10cls)'] = collect_data(iid_5_workers_dynamic_lambda_10pcnt)
-    data_to_plot['FedAvg (res6, iid, 100%private data, 10cls)'] = collect_data(fedavg_2cls_iid_200round_5worker_again)
-
+    # data_to_plot['Federated Distillation (res18, iid, 100% public data, unlabeled, 10cls)'] = collect_data(iid_5_workers)
+    
+    #### dynamic cases ####
+    # data_to_plot['Federated Distillation (res18, iid, dynamic lambda(0.75, 1) 10%public data, 10cls)'] = collect_data(iid_5_workers_dynamic_lambda_10pcnt)
+    data_to_plot['Federated Distillation (res18, iid, lambda(0.25 & 1) 50%public data, alt, 10cls)'] = collect_data(iid_5_workers_dynamic_lambda_50pcnt_alter)
+    data_to_plot['Federated Distillation (res18, iid, lambda(0.25 & 1) 25%public data, alt, 10cls)'] = collect_data(iid_5_workers_dynamic_lambda_25pcnt_alter)
+    data_to_plot['Federated Distillation (res18, iid, lambda(0 & 1) 50%public data, alt, 10cls)'] = collect_data(iid_5_workers_dynamic_lambda_50pcnt_alter_01)
+    data_to_plot['Federated Distillation (res18, iid, lambda(0 & 1) 25%public data, alt, 10cls)'] = collect_data(iid_5_workers_dynamic_lambda_25pcnt_alter_01)
+    data_to_plot['Centralized (res18, 50%public data, 10cls)'] = collect_data(centralized_res18_10cls_25pct)
+    data_to_plot['Centralized (res18, 25%public data, 10cls)'] = collect_data(centralized_res18_10cls_1_25pct)
+    
     # plot normal
     # plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', '', output= base  + 'iid_partial_distill.png')
     
     # plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', '', output= 'results/non_iid_public_res8_ten_workers_2_cls_private_distill_distill_pct_0.1/'  + 'partial_distill.png')
     # plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', '', output= 'results/non_iid_public_res6_ten_workers_2_cls_public_distill/'  + 'partial_distill.png')
-    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', '', output= 'results/iid_5_workers_res6_2_cls_public_distill_lamb_0.5/'  + 'fd_fedavg.png')
-
-
-
+    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', '', output= 'results/iid_5_workers_res6_2_cls_public_distill_dynamic_lambda_0_1_25_pcnt_distill_alter/'  + 'fd_fedavg.png')

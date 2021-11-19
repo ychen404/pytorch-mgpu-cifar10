@@ -750,15 +750,20 @@ def distill_from_multi_workers(
         if use_pseudo_labels:
             logger.debug(f"Enable pseudo labels")
             loss_sd = loss_fun(out_s, pseudo_labels)
-            loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd + 0.5 * loss_sd
+            loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd + lambda_ * loss_sd
 
         else:
             # loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
             # mix the batch of labeled and unlabeled data (11/16)
-            if batch_idx <= len(trainloader_concat) * distill_percent:
-                lambda_ = 1
+
+            alter_factor = 1/distill_percent
+            # if batch_idx <= len(trainloader_concat) * distill_percent:
+            if batch_idx % alter_factor == 0:
+                logger.debug(f"Setting lambda to 0")
+                lambda_ = 0
             else:
-                lambda_ = 0.75
+                logger.debug(f"Setting lambda to 1")
+                lambda_ = 1
 
             loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
 
@@ -1059,7 +1064,6 @@ if __name__ == "__main__":
                         else:
                             trainloader_public, testloader_public = get_worker_data_hardcode(trainset_public, args.num_workers * args.split, workerid=0)
 
-
                     else:
                         logger.debug("In the else condition")
                         
@@ -1152,7 +1156,6 @@ if __name__ == "__main__":
                         # cloud_net = freeze_except_last_layer(cloud_net)
                         trainset_finetune, _ = split_train_data(trainset_public, args.finetune_percent)
                         finetune_loader = get_loader(trainset_finetune, args)
-                        
                         run_finetune(cloud_net, 0, args, finetune_loader, testloader_public, device, 'cloud_finetune')
                         
 
