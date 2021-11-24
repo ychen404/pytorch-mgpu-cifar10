@@ -67,6 +67,8 @@ def parse_arguments():
     parser.add_argument('--finetune', action='store_true', help="finetune the cloud model")
     parser.add_argument('--finetune_epoch', default=10, type=int, help='number of epochs for finetune')
     parser.add_argument('--finetune_percent', default=0.2, type=float, help='percentage of data to finetune')
+    parser.add_argument('--random_sample', action='store_true', help="each client has random portion of the data")
+    parser.add_argument('--sample_percent', default=1, type=float, help='percentage of private data in each worker')
 
 
     args = parser.parse_args()
@@ -845,7 +847,6 @@ def run_concat_distill_multi(
     )->nn.Module:
     """Concatenate the three datase from the edge workers together and test distillation with lambda set to 0"""
     
-    logger.debug("From concat distill")
     strtime = get_time()
     list_loss = []
 
@@ -1018,10 +1019,19 @@ if __name__ == "__main__":
                 elif args.public_distill and args.iid:
                     logger.info(f"Using {int(args.split * 100)}% for iid")
                     extract_trainset = extract_classes(trainset_private, args.split, workerid=0)
-                    # use 1 thread worker instead of 4 in the single gpu case
-                    trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
-                    _, testloader_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
+                    if args.random_sample:
 
+                        logger.info(f"Performing overlap data test")
+                        # start from the full dataset
+                        # trainloaders = [get_loader(extract_trainset, args) for i in range(args.num_workers)]
+                        trainloaders = get_random_loaders(extract_trainset, n_clients=args.num_workers, percent=args.sample_percent, seed=100) 
+
+                    else:
+                        # use 1 thread worker instead of 4 in the single gpu case
+                        trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
+
+                    _, testloader_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
+                        
                 else:
                     # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
                     trainloaders = get_subclasses_loaders(trainset, args.num_workers, client_classes, num_workers=4, seed=100)
@@ -1148,6 +1158,8 @@ if __name__ == "__main__":
                     nets = check_model_trainable(nets)
                     for i in range(0, args.num_workers, 1):
                         run_train(nets[i], round, args, trainloaders[i], testloader_iid, i, device, 'edge_' + str(i))
+                        # add the break to test using single worker for same distribution
+                        # break
                     
                     logger.debug("Distilling with public data")
                     run_concat_distill_multi(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device, prefix='distill_')

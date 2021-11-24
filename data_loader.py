@@ -290,8 +290,39 @@ def get_dirichlet_loaders(train_data, n_clients=3, alpha=0, batch_size=128, n_da
                                                     num_workers=num_workers, 
                                                     pin_memory=True) for subset in client_data]
 
+    return client_loaders
+
+
+def get_random_loaders(train_data, n_clients=3, percent=100, batch_size=128, num_workers=4, seed=0):
+
+    # # Check if it is train_data object
+    if not isinstance(train_data, torchvision.datasets.cifar.CIFAR100):
+        train_data_targets = extract_targets(train_data)
+
+    else:
+        train_data_targets = train_data.targets
+    
+    all_idxs = [i for i in range(len(train_data))]
+    num_items = int(len(train_data) * percent)
+    
+    # each edge worker has classes randomly sampled from the private data
+    subset_idcs = [np.random.choice(all_idxs, num_items, replace=True) for _ in range(n_clients)]
+    client_data = [torch.utils.data.Subset(train_data, subset_idcs[i]) for i in range(n_clients)]
+    # pdb.set_trace()
+    
+    for i in range(n_clients):
+        print(f"Samples {i} worker: {len(subset_idcs[i])}")
+
+    client_loaders = [torch.utils.data.DataLoader(subset, 
+                                                    batch_size=batch_size, 
+                                                    shuffle=True, 
+                                                    num_workers=num_workers, 
+                                                    pin_memory=True) for subset in client_data]
+
 
     return client_loaders
+
+
 
 def get_subclasses_loaders(train_data, n_clients=3, client_classes=2, batch_size=128, num_workers=4, seed=0):
 

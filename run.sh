@@ -205,18 +205,40 @@
                 # --add_cifar10 \
 
 # IID
-split=0.1
-# --workspace iid_5_workers_res6_2_cls_public_distill_lambda_0.5_10_pcnt_distill \
-# iid_5_workers_res6_2_cls_public_distill_dynamic_lambda_10_pcnt_distill
+# split=0.1
+# # --workspace iid_5_workers_res6_2_cls_public_distill_lambda_0.5_10_pcnt_distill \
+# CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+#                 --workspace iid_5_worker_res6_public_distill_dynamic_lambda_0_1_50_pcnt_distill_alter_data_each_edge_allprivatedata \
+#                 --net res6 \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --dataset cifar100 \
+#                 --num_workers 5 \
+#                 --num_rounds 1 \
+#                 --epoch 2 \
+#                 --cloud_epoch 2 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 0.5 \
+#                 --iid \
+#                 --two \
+#                 --alternate \
+#                 --public_distill \
+#                 --distill_percent 0.5 \
+#                 --public_percent 0.5 
 
+# IID with random sampling (edge workers may have overlapped data)
+split=0.1
 CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
-                --workspace iid_5_workers_res6_2_cls_public_distill_dynamic_lambda_0_1_25_pcnt_distill_alter \
+                --workspace iid_10_worker_res6_public_distill_dynamic_lambda_0_1_50_pcnt_distill_alter_data_each_edge_random_sample_025 \
                 --net res6 \
                 --cloud res18 \
                 --split $split \
                 --split_classes \
                 --dataset cifar100 \
-                --num_workers 5 \
+                --num_workers 10 \
                 --num_rounds 1 \
                 --epoch 200 \
                 --cloud_epoch 200 \
@@ -228,8 +250,10 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
                 --two \
                 --alternate \
                 --public_distill \
-                --distill_percent 0.25 \
-                --public_percent 0.5
+                --distill_percent 0.5 \
+                --public_percent 0.5 \
+                --random_sample \
+                --sample_percent 0.25
 
 # iid with finetune cloud model
 # --workspace iid_5_workers_res6_2_cls_public_distill_finetune_50eps_all_publicdata \
