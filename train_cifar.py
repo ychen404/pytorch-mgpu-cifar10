@@ -757,9 +757,10 @@ def distill_from_multi_workers(
         else:
             # loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
             # mix the batch of labeled and unlabeled data (11/16)
-
-            alter_factor = 1/distill_percent
-            # if batch_idx <= len(trainloader_concat) * distill_percent:
+            
+            # test for 0% true label without random sampling
+            true_label_percent = 0.5
+            alter_factor = 1/true_label_percent
             if batch_idx % alter_factor == 0:
                 logger.debug(f"Setting lambda to 0")
                 lambda_ = 0

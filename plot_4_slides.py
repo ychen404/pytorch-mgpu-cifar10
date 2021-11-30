@@ -48,12 +48,12 @@ def plot(y_axis, xlabel=None, ylabel=None, title=None, set_color='r', output='re
     ax.set(xlabel=xlabel, ylabel=ylabel, title=title)
     
     for k, v in y_axis.items():
-        if 'Distillation'.lower() in k or "FD" in k and 'unlabeled' not in k:
+        if 'Distillation' in k or "FD" in k and 'unlabeled' not in k:
             ax.plot(x_axis, v, next(linecycler), label=k, color='#8C1D40')
         elif 'FedAvg' in k:
             ax.plot(x_axis, v, next(linecycler), label=k, color='mediumblue')
         else:
-            ax.plot(x_axis, v, next(linecycler), label=k, color='darkgreen')
+            ax.plot(x_axis, v, ls='-', label=k, color='darkgreen')
     
     # box = ax.get_position()
     # ax.set_position([box.x0, box.y0, box.width, box.height])
@@ -94,10 +94,11 @@ if __name__ == "__main__":
     centralized_res18_10cls_25pct = 'results/res18_10cls_25_percent/acc_res18_2021-10-01-18-02.csv'
     centralized_res18_10cls_1_25pct = 'results/res18_10cls_12.5_percent/acc_res18_2021-11-18-19-23.csv'
     centralized_res18_10cls_100pct = 'results/res18_10cls_100_percent/acc_res18_2021-10-01-17-51.csv'
-    centralized_res18_20cls_100pct = 'results/res18_20cls_100_percent/acc_res18_2021-10-07-15-39.csv'
+    centralized_res18_20cls_100pct = 'results/res18_20cls_100_percent_again/acc_res18_2021-11-24-17-23.csv'
+    centralized_res18_10cls_100pct_lr001 = 'results/res18_20cls_100_percent_again_sgd_lr_001_again1/acc_res18_2021-11-26-17-17.csv'
+    # centralized_res18_10cls_100pct_lr001 = 'results/res18_20cls_100_percent_again_sgd_lr_0001/acc_res18_2021-11-26-23-19.csv'
     
     # centralized_res18_10cls_1_25pct = 'results/res18_10cls_12.5_percent_dirichlet/acc_res18_2021-11-18-20-00.csv'
-
 
     # five workers 2 cls
 
@@ -215,7 +216,17 @@ if __name__ == "__main__":
                 'results/cifar100_iid_five_worker_fedavg_20cls_200rounds_resnet6_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
     
     fedavg_20_cls_alldata = '/home/users/yitao/Code/python-socket-FL/' + \
-                'results/cifar100_iid_five_worker_fedavg_20cls_200rounds_resnet6_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
+                'results/cifar100_iid_10_worker_fulldata_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
+    fedavg_20_cls_75pcnt_data = '/home/users/yitao/Code/python-socket-FL/' + \
+                'results/cifar100_iid_10_worker_75pcnt_data_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
+    fedavg_20_cls_50pcnt_data = '/home/users/yitao/Code/python-socket-FL/' + \
+                'results/cifar100_iid_10_worker_50pcnt_data_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
+    fedavg_20_cls_25pcnt_data = '/home/users/yitao/Code/python-socket-FL/' + \
+                'results/cifar100_iid_10_worker_75pcnt_data_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
+
+    fedavg_10_cls_10pcnt_data = '/home/users/yitao/Code/python-socket-FL/' + \
+                'results/cifar100_iid_10_worker_10cls_100_pcnt_private_data_eps_5_alpha_100.0_mode_FedAvg/cifar100/acc_parsed.csv'
+
 
     distill_5_pct = 'results/non_iid_public_res8_five_workers_2_cls_public_distill_distill_pct_0.05/distill_2021-10-28-19-18.csv'
     distill_10_pct = 'results/non_iid_public_res8_five_workers_2_cls_public_distill_distill_pct_0.1/distill_2021-10-28-19-15.csv'
@@ -261,12 +272,11 @@ if __name__ == "__main__":
     iid_5_worker_075_private_data = 'results/iid_5_worker_res6_public_distill_dynamic_lambda_0_1_50_pcnt_distill_alter_data_each_edge_random_sample_075/distill_2021-11-23-00-51.csv'
     iid_5_worker_050_private_data = 'results/iid_5_worker_res6_public_distill_dynamic_lambda_0_1_50_pcnt_distill_alter_data_each_edge_random_sample_050/distill_2021-11-23-00-55.csv'
 
-
     iid_10_worker_all_private_data = 'results/iid_10_worker_res6_public_distill_dynamic_lambda_0_1_50_pcnt_distill_alter_data_each_edge_random_sample_100/distill_2021-11-24-05-09.csv'
     iid_10_worker_075_private_data = 'results/iid_10_worker_res6_public_distill_dynamic_lambda_0_1_50_pcnt_distill_alter_data_each_edge_random_sample_075/distill_2021-11-24-04-52.csv'
     iid_10_worker_050_private_data = 'results/iid_10_worker_res6_public_distill_dynamic_lambda_0_1_50_pcnt_distill_alter_data_each_edge_random_sample_050/distill_2021-11-24-04-49.csv'
     iid_10_worker_025_private_data = 'results/iid_10_worker_res6_public_distill_dynamic_lambda_0_1_50_pcnt_distill_alter_data_each_edge_random_sample_025/distill_2021-11-24-04-50.csv'
-
+    iid_10_worker_010_private_data = 'results/iid_10_worker_res6_public_distill_dynamic_lambda_0_1_50_pcnt_distill_alter_data_each_edge_random_sample_010/distill_2021-11-29-02-00.csv'
     # data_to_plot['Federated Distillation (res18, private, 100%data, 10cls)'] = collect_data(cloud)
     # data_to_plot['Centralized '] = collect_data(resnet18_alldata)
     # data_to_plot['Federated Distillation'] = collect_data(cloud_pub)
@@ -287,8 +297,10 @@ if __name__ == "__main__":
     # data_to_plot['Federated Distillation (20% shared data)'] = collect_data(private_distill_20_pct)
     # data_to_plot['Federated Distillation (30% shared data)'] = collect_data(private_distill_30_pct)
     # data_to_plot['Federated Distillation (40% shared data)'] = collect_data(private_distill_40_pct)
-    # data_to_plot['FedAvg'] = collect_data(fedavg_2cls_noniid_200round_10worker)   
-    # data_to_plot['Centralized (res18, 50%data, 20cls)'] = collect_data(centralized_res18_20cls_50pct)
+    # data_to_plot['FedAvg'] = collect_data(fedavg_2cls_noniid_200round_10worker)
+    # # data_to_plot['Centralized (res18, 50%data, 20cls)'] = collect_data(centralized_res18_20cls_50pct)
+    # data_to_plot['Centralized'] = collect_data(centralized_res18_20cls_50pct)
+
 
     # data_to_plot['40% private data to distill'] = collect_data(private_distill_40_pct)
     # data_to_plot['Centralized (res18, 50%data, 10cls)'] = collect_data(resnet18_halfdata)
@@ -299,7 +311,9 @@ if __name__ == "__main__":
     # data_to_plot['Federated Distillation (res18, 100%public data, 20cls)'] = collect_data(cloud_10_workers)
     # data_to_plot['FedAvg (res6, 100%private data, 20cls)'] = collect_data(fedavg_2cls_noniid_200round_10worker)
     # data_to_plot['Centralized (res18, 50%data, 20cls)'] = collect_data(centralized_res18_20cls_50pct)
-
+    # data_to_plot['Federated Distillation'] = collect_data(cloud_10_workers)
+    # data_to_plot['FedAvg'] = collect_data(fedavg_2cls_noniid_200round_10worker)
+    # data_to_plot['Centralized'] = collect_data(centralized_res18_20cls_50pct)
 
     ########## iid case with two classes shared by all workers
     # cloud_iid_2_cls = 'results/five_workers_iid_two_cls/distill_concat_2021-09-20-22-11.csv'
@@ -322,7 +336,6 @@ if __name__ == "__main__":
     # data_to_plot['Federated Distillation (res18, iid, 100%public data, 10cls)'] = collect_data(iid_5_workers)
     # data_to_plot['Federated Distillation (res18, iid, 100%public data, 20cls)'] = collect_data(cloud)
     # data_to_plot['Federated Distillation (res18, iid, 100%public data, 30cls)'] = collect_data(iid_15_workers)
-
     # data_to_plot['FedAvg (res6, iid, 100%private data, 10cls)'] = collect_data(fedavg_2cls_iid_200round_5worker_again)
     # data_to_plot['FedAvg (res6, iid, 100%private data, 20cls)'] = collect_data(fedavg_2cls_iid_200round_10worker)
     # data_to_plot['FedAvg (res6, iid, 100%private data, 30cls)'] = collect_data(fedavg_2cls_iid_200round_15worker)
@@ -359,14 +372,18 @@ if __name__ == "__main__":
     # data_to_plot['Centralized '] = collect_data(resnet18_alldata)
 
     #### overlapped edge data 10 workers
-    data_to_plot["FD (Each edge has all private data)"] = collect_data(iid_10_worker_all_private_data)
-    # data_to_plot["FD (Each edge has 75% private data)"] = collect_data(iid_5_worker_075_private_data)
-    # data_to_plot["FD (Each edge has 50% private data)"] = collect_data(iid_5_worker_050_private_data)
-    # data_to_plot['FedAvg (res6, iid, Each edge has all private data, 10cls)'] = collect_data(fedavg_10_cls_alldata)
-    data_to_plot['Centralized '] = collect_data(centralized_res18_20cls_100pct)
+    # data_to_plot["Federated Distillation (100% private data)"] = collect_data(iid_10_worker_all_private_data)
+    # data_to_plot["Federated Distillation (75% private data)"] = collect_data(iid_10_worker_075_private_data)
+    # data_to_plot["Federated Distillation (50% private data)"] = collect_data(iid_10_worker_050_private_data)
+    # data_to_plot["Federated Distillation (25% private data)"] = collect_data(iid_10_worker_025_private_data)
+    # data_to_plot["FedAvg (100% private data)"] = collect_data(fedavg_20_cls_alldata)
+    # data_to_plot["FedAvg (75% private data)"] = collect_data(fedavg_20_cls_75pcnt_data)
+    # data_to_plot["FedAvg (50% private data)"] = collect_data(fedavg_20_cls_50pcnt_data)
+    # data_to_plot["FedAvg (25% private data)"] = collect_data(fedavg_20_cls_25pcnt_data)
+    data_to_plot["Federated Distillation"] = collect_data(iid_10_worker_010_private_data)
+    data_to_plot["FedAvg"] = collect_data(fedavg_10_cls_10pcnt_data)
+    data_to_plot['Centralized '] = collect_data(centralized_res18_10cls_100pct_lr001)
     
-
-
     ############# plot edge
     # data_to_plot["100% private data"] = collect_data(res6_10cls_50pcnt_alldata)
     # data_to_plot["75% private data"] = collect_data(res6_10cls_32_5pcnt_alldata)

@@ -8,5 +8,5 @@
 
 # CUDA_VISIBLE_DEVICES=1 python3 single_model_test.py --net res34 --percent_classes 0.10 --percent_data 1 --workspace res34_10cls_100_percent
 # python3 single_model_test.py --net res18 --percent_classes 0.2 --percent_data 0.5 --workspace res18_20cls_50_percent_save
-python3 single_model_test.py --net res18 --percent_classes 0.2 --percent_data 1 --workspace res18_20cls_100_percent_again
+python3 single_model_test.py --net res18 --percent_classes 0.2 --lr 0.001 --percent_data 1 --workspace res18_20cls_100_percent_again_sgd_lr_0001
 # python3 single_model_test.py --net res18 --percent_classes 0.10 --percent_data 0.25 --workspace res18_10cls_25_percent

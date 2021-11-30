@@ -159,7 +159,6 @@ elif args.net =='res34':
 else:
     logger.debug("Not supported model")
 
-
 print_total_params(net)
 net = net.to(device)
 if device == 'cuda':
@@ -170,6 +169,8 @@ criterion = nn.CrossEntropyLoss()
 
 if args.opt == 'sgd':
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    # optimizer = optim.SGD(net.parameters(), lr=args.lr)
+
 elif args.opt =='adam':
     optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=5e-4)
 
