@@ -227,12 +227,22 @@ class ResNet(nn.Module):
         if 'layer3' in self._modules:
             x = self.layer3(x)
         
+        # x = self.avgpool(x)
+        # x = x.view(x.size(0), -1)
+        # x = self.fc(x)
+        
         x = self.avgpool(x)
-        out_emb = x.view(x.size(0), -1)       
-        x = out_emb.view(out_emb.size(0), -1)
-        x = self.fc(x)
+        emb = x.view(x.size(0), -1)       
+        x = self.fc(emb)
+        
+        if self.emb:
+            return x, emb
+        else:
+            return x
 
-        return x if not self.emb else x, out_emb
+        # return x
+        # return x if not self.emb else x, emb
+
 
 class PreAct_ResNet(nn.Module):
 

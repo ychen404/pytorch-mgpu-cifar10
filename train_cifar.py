@@ -123,7 +123,12 @@ def train(epoch, round, net, criterion, optimizer, trainloader, device):
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        outputs = net(inputs)
+        
+        if net.emb:
+            outputs, emb = net(inputs)
+        else:
+            outputs = net(inputs)
+        # pdb.set_trace()
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
@@ -149,9 +154,15 @@ def test(epoch, args, net, criterion, testloader, device, msg, save_checkpoint=T
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
+            
+            # Check if emb attribute exists
+            # emb only exists in edge models 
+            if hasattr(net, 'emb') and net.emb:
+                outputs, emb = net(inputs)
+            else:
+                outputs = net(inputs)
+            
             loss = criterion(outputs, targets)
-
             test_loss += loss.item()
             _, predicted = outputs.max(1)
 
@@ -195,6 +206,9 @@ def build_model_from_name(name, num_classes, device):
 
     if name == 'res6':
         net = resnet6(num_classes=num_classes)
+
+    elif name == 'res6_emb':
+        net = resnet6(num_classes=num_classes, emb=True)
 
     elif name == 'res8':
         net = resnet8(num_classes=num_classes)    
@@ -737,18 +751,35 @@ def distill_from_multi_workers(
             out_t = torch.zeros((batch_size, total_classes), device=device)
             t_max = torch.zeros((batch_size, total_classes), device=device)
 
+            # random edge is not needed any more
+            #TODO: remove random_edge case 
             if random_edge:
                 # randomly select one of the edge device to distill
                 logger.debug(f"Random edge mode selected")
                 edge_net = random.choice(edge_nets)
                 edge_net = edge_net.to(device)
-                out_t += edge_net(inputs)
+                
+                # out_t += edge_net(inputs)
+
+                out_temp_t, _ = edge_net(inputs)
+                out_t += out_temp_t
+
                 t_max += F.softmax(out_t / T, dim=1)
 
             else:
                 for edge_net in edge_nets:
+                    
                     edge_net = edge_net.to(device)
-                    out_t += edge_net(inputs)
+                    
+                    print(f"The edge_net.emb is {edge_net.emb}")
+                    
+                    if hasattr(edge_net, 'emb') and edge_net.emb:
+                        out_temp_t, _ = edge_net(inputs)
+                        out_t += out_temp_t
+                    
+                    else:
+                        out_t += edge_net(inputs)
+
                     t_max += F.softmax(out_t / T, dim=1)
 
                 if average_method == 'equal':
@@ -1188,142 +1219,124 @@ if __name__ == "__main__":
         run_distill(nets[0], cloud_net, args, trainloader, testloader, worker_num=0, device=device)
         exit()
 
-    if args.two:
-        if args.resume:
-            # net_1 = load_edge_checkpoint_fullpath(net_1, 'results/public_percent_0.5_2_cls_adam_lambda_1/checkpoint/edge_1_ckpt.t7')
-            # net_2 = load_edge_checkpoint(net_2, 'res8_edge_2_ckpt.t7')
-            nets[1] = load_edge_checkpoint_fullpath(nets[1], 'results/public_percent_0.5_2_cls_adam_lambda_1/checkpoint/edge_1_ckpt.t7')
-        else:
-            if args.iid:
-                """
-                commented out the unnecessary trainings. It's time to merge iterative and seperate together?
-                Starting from the iid case using public data to distill 
-                """
-                # run_train(nets[1], args, trainloaders[1], testloader_iid, 1, device, 'edge_1')
+    # if args.two:
+    if args.resume:
+        # net_1 = load_edge_checkpoint_fullpath(net_1, 'results/public_percent_0.5_2_cls_adam_lambda_1/checkpoint/edge_1_ckpt.t7')
+        # net_2 = load_edge_checkpoint(net_2, 'res8_edge_2_ckpt.t7')
+        nets[1] = load_edge_checkpoint_fullpath(nets[1], 'results/public_percent_0.5_2_cls_adam_lambda_1/checkpoint/edge_1_ckpt.t7')
+    else:
+        if args.iid:
+            """
+            commented out the unnecessary trainings. It's time to merge iterative and seperate together?
+            Starting from the iid case using public data to distill 
+            """
+            # run_train(nets[1], args, trainloaders[1], testloader_iid, 1, device, 'edge_1')
 
-                for round in range(args.num_rounds):
-                    
-                    logger.debug(f"############# round {round} #############")
-                    nets = check_model_trainable(nets)
-                    for i in range(0, args.num_workers, 1):
-                        run_train(nets[i], round, args, trainloaders[i], testloader_iid, i, device, 'edge_' + str(i))
-                        # add the break to test using single worker for same distribution
-                        # break
-                    
-                    logger.debug("Distilling with public data")
-                    run_concat_distill_multi(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device, prefix='distill_')
-
-                    if args.finetune:
-                        # cloud_net = freeze_except_last_layer(cloud_net)
-                        trainset_finetune, _ = split_train_data(trainset_public, args.finetune_percent)
-                        finetune_loader = get_loader(trainset_finetune, args)
-                        run_finetune(cloud_net, 0, args, finetune_loader, testloader_public, device, 'cloud_finetune')
-                        
-                if args.add_cifar10:
-                    logger.debug("Use cifar10 to distill again")
-                    trainloader_cifar10, testloader_cifar10 = get_cifar10_loader(args)
-                    run_concat_distill_multi(nets, cloud_net, args, trainloader_cifar10, testloader_public, worker_num=0, device=device, prefix='cifar10_')
+            for round in range(args.num_rounds):
                 
-                # if args.finetune:
-                #     cloud_net = freeze_except_last_layer(cloud_net)
-                #     run_train(cloud_net, 0, args, trainloader_public, testloader_public, 9, device, 'cloud_finetune')
+                logger.debug(f"############# round {round} #############")
+                nets = check_model_trainable(nets)
+                for i in range(0, args.num_workers, 1):
+                    run_train(nets[i], round, args, trainloaders[i], testloader_iid, i, device, 'edge_' + str(i))
+                    # add the break to test using single worker for same distribution
+                    # break
+                
+                logger.debug("Distilling with public data")
+                run_concat_distill_multi(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device, prefix='distill_')
 
-            else:
-                # non-iid here
-                logger.debug(30*'*' + 'Non-iid' + 30*'*')
-                logger.debug("Prepare cifar10 as public data")
+                if args.finetune:
+                    # cloud_net = freeze_except_last_layer(cloud_net)
+                    trainset_finetune, _ = split_train_data(trainset_public, args.finetune_percent)
+                    finetune_loader = get_loader(trainset_finetune, args)
+                    run_finetune(cloud_net, 0, args, finetune_loader, testloader_public, device, 'cloud_finetune')
+                    
+            if args.add_cifar10:
+                logger.debug("Use cifar10 to distill again")
                 trainloader_cifar10, testloader_cifar10 = get_cifar10_loader(args)
-                # similarity_index = []
+                run_concat_distill_multi(nets, cloud_net, args, trainloader_cifar10, testloader_public, worker_num=0, device=device, prefix='cifar10_')
+            
 
-                for round in range(args.num_rounds):        
-                    logger.debug(f"############# round {round} #############")
-                    nets = check_model_trainable(nets)
-                    for i in range(0, args.num_workers, 1):
-                        logger.debug(f"{args.num_workers}, {i}")
-                        run_train_non_iid(nets[i], round, args, trainloaders[i], testloader_non_iid[0], testloaders[i], i, device, 'edge_' + str(i))
-                        # loop over cifar10
-                        # each image calculate similarity against each image in private dataset
-                        # sum up the similarity and divided by the number of private images
-                        # iterate over all the public data
-                        # calculate the total similarity
-                        # similarity_index.append()
+        else:
+            # non-iid case here
+            logger.debug(30*'*' + 'Non-iid' + 30*'*')
+            logger.debug("Prepare cifar10 as public data")
+            trainloader_cifar10, testloader_cifar10 = get_cifar10_loader(args)
+            # similarity_index = []
 
-                    if args.private_mixed_percent != 0:
-                    # use part of private data to train
-                    # The mixed loader does not seem to be correct
-                    # In this way it is impossible to differentiate private and public data
-                        run_concat_distill_multi(nets, 
-                                                cloud_net, 
-                                                args, 
-                                                mixed_loader, 
-                                                testloader_non_iid[0], 
-                                                worker_num=0, 
-                                                device=device, 
-                                                selection=args.selection,
-                                                random_edge=False,
-                                                mixed_private=True,
-                                                prefix='distill_private')
-                    # Get the public data with the specified classes
+            for round in range(args.num_rounds):        
+                logger.debug(f"############# round {round} #############")
+                nets = check_model_trainable(nets)
+                for i in range(0, args.num_workers, 1):
+                    logger.debug(f"{args.num_workers}, {i}")
+                    run_train_non_iid(nets[i], round, args, trainloaders[i], testloader_non_iid[0], testloaders[i], i, device, 'edge_' + str(i))
+                    logger.debug("Done edge training")
+
+
+                if args.private_mixed_percent != 0:
+                # use part of private data to train
+                # The mixed loader does not seem to be correct
+                # In this way it is impossible to differentiate private and public data
                     run_concat_distill_multi(nets, 
                                             cloud_net, 
                                             args, 
-                                            trainloader_all[0], 
+                                            mixed_loader, 
                                             testloader_non_iid[0], 
                                             worker_num=0, 
-                                            device=device,
-                                            selection=False, 
-                                            random_edge=True, 
-                                            mixed_private=False,
-                                            prefix='distill_')
-                        
-                    # run_concat_distill_multi(nets, 
-                    #                         cloud_net, 
-                    #                         args, 
-                    #                         trainloader_all[0], 
-                    #                         testloader_non_iid[0], 
-                    #                         worker_num=0, 
-                    #                         device=device,
-                    #                         selection=False, 
-                    #                         random_edge=False, 
-                    #                         prefix='distill_averaged')
+                                            device=device, 
+                                            selection=args.selection,
+                                            random_edge=False,
+                                            mixed_private=True,
+                                            prefix='distill_private')
 
+                # Get the public data with the specified classes
+                run_concat_distill_multi(nets, 
+                                        cloud_net, 
+                                        args, 
+                                        trainloader_all[0], 
+                                        testloader_non_iid[0], 
+                                        worker_num=0, 
+                                        device=device,
+                                        selection=False, 
+                                        random_edge=False, 
+                                        mixed_private=False,
+                                        prefix='distill_')
 
-
-                exit()       
-                
-        logger.debug(30*'*' + 'Done training workers' + 30*'*')
-
-        if not args.alternate:
-            # run_distill(net_1, cloud_net, args, trainloader_1, testloader_1, worker_num=1, device=device)
-            run_distill(nets[1], cloud_net, args, trainloader_1, testloader_1, worker_num=1, device=device)
-            # test the first 10 classes
-            logger.debug(30*'*' + 'Testing on the other 10 classes' + 30*'*')
-            test_only(cloud_net, testloader, device)
-        else:
+            exit()       
             
-            # use public to distill
-            # need to add --public_distill flag
-            if args.public_distill:
+    logger.debug(30*'*' + 'Done training workers' + 30*'*')
 
-                # run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls_public, testloader_30cls, worker_num=0, device=device)
-                logger.debug("Distilling with public data")
-                
-                # run_concat_distill_two(nets[0], nets[1], cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device)
-                # Enable multiple edge models
-                
-                ######################### seperate distillation step #########################
-                # run_concat_distill_multi(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device)
-                ##############################################################################
 
-                # try to use private data to distill
-                # run_concat_distill_two(net, net_1, cloud_net, args, trainloader_private, testloader_public, worker_num=0, device=device)
-            else:
-                # if want to use private data to distill change the 'use_full_data' flag to false
-                # concat dataset private
-                # run_concat_distill_two(net[0], nets[1], cloud_net, args, trainloader_cloud, testloader_cloud, worker_num=0, device=device)
-                # Enable multiple edge models
-                run_concat_distill_multi(net[0], nets[1], cloud_net, args, trainloader_cloud, testloader_cloud, worker_num=0, device=device)
-
+    
+    if not args.alternate:
+        run_distill(nets[1], cloud_net, args, trainloader_1, testloader_1, worker_num=1, device=device)
+        # test the first 10 classes
+        logger.debug(30*'*' + 'Testing on the other 10 classes' + 30*'*')
+        test_only(cloud_net, testloader, device)
     else:
-        logger.debug("Done experiment")
-        exit()
+        
+        # use public to distill
+        # need to add --public_distill flag
+        if args.public_distill:
+
+            # run_concat_distill_multi(net, net_1, net_2, cloud_net, args, trainloader_30cls_public, testloader_30cls, worker_num=0, device=device)
+            logger.debug("Distilling with public data")
+            
+            # run_concat_distill_two(nets[0], nets[1], cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device)
+            # Enable multiple edge models
+            
+            ######################### seperate distillation step #########################
+            # run_concat_distill_multi(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device)
+            ##############################################################################
+
+            # try to use private data to distill
+            # run_concat_distill_two(net, net_1, cloud_net, args, trainloader_private, testloader_public, worker_num=0, device=device)
+        else:
+            # if want to use private data to distill change the 'use_full_data' flag to false
+            # concat dataset private
+            # run_concat_distill_two(net[0], nets[1], cloud_net, args, trainloader_cloud, testloader_cloud, worker_num=0, device=device)
+            # Enable multiple edge models
+            run_concat_distill_multi(net[0], nets[1], cloud_net, args, trainloader_cloud, testloader_cloud, worker_num=0, device=device)
+
+else:
+    logger.debug("Done experiment")
+    exit()
