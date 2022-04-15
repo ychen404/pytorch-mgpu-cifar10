@@ -30,19 +30,16 @@ logger.addHandler(c_handler)
 c_format = logging.Formatter(fmt_str)
 c_handler.setFormatter(c_format)
 
-# epoch=200
-# batch_size=128
+epoch=200
+batch_size=128
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 start_epoch=0
 
-parser = argparse.ArgumentParser(description='PyTorch CIFAR100 Training')
+parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
-parser.add_argument('--bs', default=128, type=int, help='batch size')
-parser.add_argument('--epoch', default=200, type=int, help='epochs')
 parser.add_argument('--net', default='res8')
 parser.add_argument('--opt', default='sgd')
 parser.add_argument('--workspace', default='test_workspace')
-parser.add_argument('--dataset', default='cifar100')
 parser.add_argument("--percent_classes", default=1, type=float, help="how many classes to classify")
 parser.add_argument("--percent_data", default=1, type=float, help="percentage of data to use for training")
 
@@ -113,72 +110,48 @@ def check_dir(directory):
 
 
 t0 = time.time()
+print('==> Preparing data..')
 
-if args.dataset == "cifar100":
-    print('==> Preparing CIFAR-100 data..')
-    transform_train = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize((0.507, 0.487, 0.441), (0.267, 0.256, 0.276)),
-        ])
+# transform_train = transforms.Compose([
+#         transforms.RandomCrop(32, padding=4),
+#         transforms.RandomHorizontalFlip(),
+#         transforms.ToTensor(),
+#         transforms.Normalize((0.507, 0.487, 0.441), (0.267, 0.256, 0.276)),
+#     ])
 
-    transform_test = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.507, 0.487, 0.441), (0.267, 0.256, 0.276)),
-        ])
+# transform_test = transforms.Compose([
+#         transforms.ToTensor(),
+#         transforms.Normalize((0.507, 0.487, 0.441), (0.267, 0.256, 0.276)),
+#     ])
 
-    trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
-    testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
-    length = len(trainset)
+# trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
+# testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
+# length = len(trainset)
 
-
-elif args.dataset == "cifar10":
-    print('==> Preparing CIFAR-10 data..')
-    transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
+transform_train = transforms.Compose([
+    transforms.RandomResizedCrop(32),
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ])
+    transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+])
 
-    transform_test = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ])
+transform_test = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+])
 
-    trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
-    # trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True, num_workers=4)
+datapath = '/home/users/yitao/downsampled_imagenet/imagenet32'
 
-    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
-    # testloader = torch.utils.data.DataLoader(testset, batch_size=args.bs, shuffle=False, num_workers=4)
+trainset = ImageNetDownSample(root=datapath, train=True, transform=transform_train)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=4)
 
-    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
-
-elif args.dataset == "imagenet":
-    transform_train = transforms.Compose([
-        transforms.RandomResizedCrop(32),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-        ])
-
-    transform_test = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-    ])
-
-    datapath = '/home/users/yitao/downsampled_imagenet/imagenet32'
-
-    trainset = ImageNetDownSample(root=datapath, train=True, transform=transform_train)
-    # trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=4)
-
-    testset = ImageNetDownSample(root=datapath, train=False, transform=transform_test)
-    # testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=4)
+testset = ImageNetDownSample(root=datapath, train=False, transform=transform_test)
+testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=4)
+# pdb.set_trace()
 
 if args.percent_classes != 1:
     trainset = extract_classes(trainset, args.percent_classes, workerid=0)
+    pdb.set_trace()
     testset = extract_classes(testset, args.percent_classes, workerid=0)
     
     if args.percent_data != 1:
@@ -189,24 +162,23 @@ if args.percent_classes != 1:
         # assert len(trainset) == target_length, f"Wrong target length. trainset: {len(trainset)} target: {target_length}"
 
     else:
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True, num_workers=4)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=4)
 
-testloader = torch.utils.data.DataLoader(testset, batch_size=args.bs, shuffle=False, num_workers=4)
+testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False, num_workers=4)
 
 print('==> Building model..')
-
-nc = 100 if args.dataset == "cifar100" else 1000
+num_classes = 1000
 
 if args.net == 'res4':
-    net = resnet4(num_classes=100)
+    net = resnet4(num_classes=num_classes)
 elif args.net == 'res8':
-    net = resnet8(num_classes=100)
+    net = resnet8(num_classes=num_classes)
 elif args.net == 'res6':
-    net = resnet6(num_classes=100)
+    net = resnet6(num_classes=num_classes)
 elif args.net =='res18':
-    net = resnet18(num_classes=100)
+    net = resnet18(num_classes=num_classes)
 elif args.net =='res34':
-    net = resnet34(num_classes=100)
+    net = resnet34(num_classes=num_classes)
 
 else:
     logger.debug("Not supported model")
@@ -233,9 +205,10 @@ t2 = time.time()
 strtime = get_time()
 root = 'results/' + args.workspace
 check_dir(root)
+# print(net)
 
 best_acc = 0
-for epoch in range(args.epoch):
+for epoch in range(start_epoch, start_epoch + epoch):
     trainloss = train(epoch)
     acc = test_acc(epoch)
     logger.debug(f"The result is: {acc}")

@@ -169,7 +169,6 @@ def get_loader(train_data, args):
                                                 pin_memory=True)
     return train_loader
 
-
 def extract_targets(train_data):
   
   targets = []

@@ -301,11 +301,9 @@ if __name__ == "__main__":
     # # data_to_plot['Centralized (res18, 50%data, 20cls)'] = collect_data(centralized_res18_20cls_50pct)
     # data_to_plot['Centralized'] = collect_data(centralized_res18_20cls_50pct)
 
-
     # data_to_plot['40% private data to distill'] = collect_data(private_distill_40_pct)
     # data_to_plot['Centralized (res18, 50%data, 10cls)'] = collect_data(resnet18_halfdata)
     # data_to_plot['Federated Distillation (res18, public, 25%data, 10cls)'] = collect_data(cloud_25_pcnt)
-
 
     ########## previous non iid case 
     # data_to_plot['Federated Distillation (res18, 100%public data, 20cls)'] = collect_data(cloud_10_workers)
@@ -380,9 +378,11 @@ if __name__ == "__main__":
     # data_to_plot["FedAvg (75% private data)"] = collect_data(fedavg_20_cls_75pcnt_data)
     # data_to_plot["FedAvg (50% private data)"] = collect_data(fedavg_20_cls_50pcnt_data)
     # data_to_plot["FedAvg (25% private data)"] = collect_data(fedavg_20_cls_25pcnt_data)
-    data_to_plot["Federated Distillation"] = collect_data(iid_10_worker_010_private_data)
-    data_to_plot["FedAvg"] = collect_data(fedavg_10_cls_10pcnt_data)
-    data_to_plot['Centralized '] = collect_data(centralized_res18_10cls_100pct_lr001)
+
+    ## 11/30
+    # data_to_plot["Federated Distillation"] = collect_data(iid_10_worker_010_private_data)
+    # data_to_plot["FedAvg"] = collect_data(fedavg_10_cls_10pcnt_data)
+    # data_to_plot['Centralized '] = collect_data(centralized_res18_10cls_100pct_lr001)
     
     ############# plot edge
     # data_to_plot["100% private data"] = collect_data(res6_10cls_50pcnt_alldata)

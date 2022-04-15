@@ -9,6 +9,8 @@ Reference:
 import torch.nn as nn
 import math
 import pdb
+import torch
+
 
 
 def conv3x3(in_planes, out_planes, stride=1):
@@ -162,14 +164,13 @@ class PreActBottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes=10, emb=False):
+    def __init__(self, block, layers, num_classes=10):
         super(ResNet, self).__init__()
         self.inplanes = 16
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3,
                                stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(16)
         self.relu = nn.ReLU(inplace=True)
-        self.emb = emb
         
         self.layer1 = self._make_layer(block, 16, layers[0])
 
@@ -187,7 +188,9 @@ class ResNet(nn.Module):
         else:
             # layers == 1
             self.avgpool = nn.AvgPool2d(32, stride=1)
+            # self.fc = nn.Linear(16 * block.expansion, num_classes)
             self.fc = nn.Linear(16 * block.expansion, num_classes)
+
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -216,23 +219,33 @@ class ResNet(nn.Module):
 
 
     def forward(self, x):
+        
+        print(f"input: {x.shape}")
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.layer1(x)
         
         if 'layer2' in self._modules:
+            print("here?")
             x = self.layer2(x)
 
         if 'layer3' in self._modules:
             x = self.layer3(x)
-        
-        x = self.avgpool(x)
-        out_emb = x.view(x.size(0), -1)       
-        x = out_emb.view(out_emb.size(0), -1)
-        x = self.fc(x)
+        print(f"2: {x.shape}")
 
-        return x if not self.emb else x, out_emb
+
+        x = self.avgpool(x)
+        print(f"3: {x.shape}")
+
+        x = x.view(x.size(0), -1)
+        print(f"4: {x.shape}")
+
+        x = self.fc(x)
+        print(f"5: {x.shape}")
+
+        return x
+
 
 class PreAct_ResNet(nn.Module):
 
@@ -288,83 +301,85 @@ class PreAct_ResNet(nn.Module):
         return x
 
 
-def resnet4(**kwargs):
-    model = ResNet(BasicBlock, [1], **kwargs)
-    return model
+# def resnet4(**kwargs):
+#     model = ResNet(BasicBlock, [1], **kwargs)
+#     return model
 
 
-def resnet6(**kwargs):
+def resnet6_imagenet(**kwargs):
     model = ResNet(BasicBlock, [1, 1], **kwargs)
     return model
 
-def resnet8(**kwargs):
-    model = ResNet(BasicBlock, [1, 1, 1], **kwargs)
-    return model
+# def resnet8(**kwargs):
+#     model = ResNet(BasicBlock, [1, 1, 1], **kwargs)
+#     return model
 
 
-def resnet14(**kwargs):
-    model = ResNet(BasicBlock, [2, 2, 2], **kwargs)
-    return model
+# def resnet14(**kwargs):
+#     model = ResNet(BasicBlock, [2, 2, 2], **kwargs)
+#     return model
 
 
-def resnet20(**kwargs):
-    model = ResNet(BasicBlock, [3, 3, 3], **kwargs)
-    return model
+# def resnet20(**kwargs):
+#     model = ResNet(BasicBlock, [3, 3, 3], **kwargs)
+#     return model
 
 
-def resnet32(**kwargs):
-    model = ResNet(BasicBlock, [5, 5, 5], **kwargs)
-    return model
+# def resnet32(**kwargs):
+#     model = ResNet(BasicBlock, [5, 5, 5], **kwargs)
+#     return model
 
 
-def resnet44(**kwargs):
-    model = ResNet(BasicBlock, [7, 7, 7], **kwargs)
-    return model
+# def resnet44(**kwargs):
+#     model = ResNet(BasicBlock, [7, 7, 7], **kwargs)
+#     return model
 
 
-def resnet56(**kwargs):
-    model = ResNet(BasicBlock, [9, 9, 9], **kwargs)
-    return model
+# def resnet56(**kwargs):
+#     model = ResNet(BasicBlock, [9, 9, 9], **kwargs)
+#     return model
 
 
-def resnet110(**kwargs):
-    model = ResNet(BasicBlock, [18, 18, 18], **kwargs)
-    return model
+# def resnet110(**kwargs):
+#     model = ResNet(BasicBlock, [18, 18, 18], **kwargs)
+#     return model
 
 
-def resnet1202(**kwargs):
-    model = ResNet(BasicBlock, [200, 200, 200], **kwargs)
-    return model
+# def resnet1202(**kwargs):
+#     model = ResNet(BasicBlock, [200, 200, 200], **kwargs)
+#     return model
 
 
-def resnet164(**kwargs):
-    model = ResNet(Bottleneck, [18, 18, 18], **kwargs)
-    return model
+# def resnet164(**kwargs):
+#     model = ResNet(Bottleneck, [18, 18, 18], **kwargs)
+#     return model
 
 
-def resnet1001(**kwargs):
-    model = ResNet(Bottleneck, [111, 111, 111], **kwargs)
-    return model
+# def resnet1001(**kwargs):
+#     model = ResNet(Bottleneck, [111, 111, 111], **kwargs)
+#     return model
 
 
-def preact_resnet110(**kwargs):
-    model = PreAct_ResNet(PreActBasicBlock, [18, 18, 18], **kwargs)
-    return model
+# def preact_resnet110(**kwargs):
+#     model = PreAct_ResNet(PreActBasicBlock, [18, 18, 18], **kwargs)
+#     return model
 
 
-def preact_resnet164(**kwargs):
-    model = PreAct_ResNet(PreActBottleneck, [18, 18, 18], **kwargs)
-    return model
+# def preact_resnet164(**kwargs):
+#     model = PreAct_ResNet(PreActBottleneck, [18, 18, 18], **kwargs)
+#     return model
 
 
-def preact_resnet1001(**kwargs):
-    model = PreAct_ResNet(PreActBottleneck, [111, 111, 111], **kwargs)
-    return model
+# def preact_resnet1001(**kwargs):
+#     model = PreAct_ResNet(PreActBottleneck, [111, 111, 111], **kwargs)
+#     return model
 
 
 if __name__ == "__main__":
-    net = resnet6(num_classes=10)
+    net = resnet6_imagenet(num_classes=1000)
     # print(net)
     total_params = sum(p.numel() for p in net.parameters())
     layers = len(list(net.modules()))
     print(f" total parameters: {total_params}, layers {layers}")
+    input = torch.rand([128, 3, 224, 224])
+    net(input)

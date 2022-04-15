@@ -273,8 +273,10 @@ def resnet152(**kwargs):
 
 
 if __name__ == "__main__":
-    net = resnet18(num_classes=100)
+    net = resnet18(num_classes=10)
     # print(net)
     total_params = sum(p.numel() for p in net.parameters())
     layers = len(list(net.modules()))
     print(f" total parameters: {total_params}, layers {layers}")
+    input = torch.rand([128, 3, 224, 224])
+    print(input.size())

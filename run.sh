@@ -156,7 +156,7 @@
 #                 # --add_cifar10 \
 
 # non-iid
-# public data
+# public data to distill
 # split=0.02
 # CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
 #                 --workspace non_iid_public_res8_ten_workers_2_cls_private_distill_distill_pct_0.4 \
@@ -179,7 +179,60 @@
 #                 --public_percent 0.5 \
 #                 --distill_percent 0.4 \
 #                 --selection
+                # --add_cifar10 \
+
+# non-iid
+# mixed private and public data to distill 
+# split=0.02
+# CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+#                 --workspace non_iid_public_res8_10_workers_2_cls_mixed_distill_public_data_0.1pcnt_private \
+#                 --net res6 \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --dataset cifar100 \
+#                 --num_workers 10 \
+#                 --num_rounds 1 \
+#                 --epoch 200 \
+#                 --cloud_epoch 200 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --two \
+#                 --alternate \
+#                 --public_distill \
+#                 --public_percent 0.5 \
+#                 --private_mixed_percent 0.1 \
+#                 --selection
 #                 # --add_cifar10 \
+
+# random edge for distillation
+split=0.02
+# non_iid_public_res6_10_workers_2_cls_0.1pcnt_private_random_edge
+CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+                --workspace non_iid_public_res6_10_workers_2_cls_random_edge_mixed_10pcnt_private \
+                --net res6 \
+                --cloud res18 \
+                --split $split \
+                --split_classes \
+                --dataset cifar100 \
+                --num_workers 10 \
+                --num_rounds 1 \
+                --epoch 200 \
+                --cloud_epoch 200 \
+                --optimizer adam \
+                --cloud_lr 0.001 \
+                --lr 0.1 \
+                --lamb 1 \
+                --two \
+                --alternate \
+                --public_distill \
+                --public_percent 0.5 \
+                --private_mixed_percent 0.1 
+                # --selection 
+                # --random_edge
+                # --add_cifar10 \
 
 # non-iid
 # private data
@@ -205,28 +258,28 @@
                 # --add_cifar10 \
 
 # IID
-split=0.1
-CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
-                --workspace iid_10_worker_res6_public_distill_unlabeled_lambda_1_50_pcnt_distill_alter_data_each_edge_50_truelabel \
-                --net res6 \
-                --cloud res18 \
-                --split $split \
-                --split_classes \
-                --dataset cifar100 \
-                --num_workers 10 \
-                --num_rounds 1 \
-                --epoch 200 \
-                --cloud_epoch 200 \
-                --optimizer adam \
-                --cloud_lr 0.001 \
-                --lr 0.1 \
-                --lamb 1 \
-                --iid \
-                --two \
-                --alternate \
-                --public_distill \
-                --public_percent 0.5 
-                # --distill_percent 0.5 \
+# split=0.1
+# CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+#                 --workspace iid_10_worker_res6_public_distill_unlabeled_lambda_1_50_pcnt_distill_alter_data_each_edge_50_truelabel \
+#                 --net res6 \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --dataset cifar100 \
+#                 --num_workers 10 \
+#                 --num_rounds 1 \
+#                 --epoch 200 \
+#                 --cloud_epoch 200 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --iid \
+#                 --two \
+#                 --alternate \
+#                 --public_distill \
+#                 --public_percent 0.5 
+#                 # --distill_percent 0.5 \
 
 # IID with random sampling (edge workers may have overlapped data)
 # split=0.1
