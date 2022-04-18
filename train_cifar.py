@@ -23,10 +23,10 @@ import pdb
 from plot_results import *
 import random
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('__name__')
 logger.setLevel('DEBUG')
-fmt_str = '%(levelname)s - %(message)s'
-fmt_file = '[%(levelname)s]: %(message)s'
+# fmt_str = '%(levelname)s - %(message)s'
+# fmt_file = '[%(levelname)s]: %(message)s'
 
 def parse_arguments():
 
@@ -49,24 +49,20 @@ def parse_arguments():
     parser.add_argument("--baseline", action='store_true', help='Perform only training for collection baseline')
     parser.add_argument('--temperature', default=1, type=float, help='temperature for distillation')
     parser.add_argument('--optimizer', default='sgd')
-    parser.add_argument('--two', action='store_true')
+    parser.add_argument('--partition_mode', default='dirichlet')
     parser.add_argument('--iid', action='store_true', help="test iid case")
-    parser.add_argument('--alternate', action='store_true', help="test the alternative case")
     parser.add_argument('--public_distill', action='store_true', help="use public data to distill")
     parser.add_argument('--exist_loader', action='store_true', help="there is exist loader")
     parser.add_argument('--save_loader', action='store_true', help="save trainloaders")
-    parser.add_argument('--alpha', default=100, type=float, help='alpha for iid setting')
+    parser.add_argument('--alpha', default=100, type=float, help='alpha for dirichle partition')
     parser.add_argument('--lamb', default=0.5, type=float, help='lambda for distillation')
     parser.add_argument('--public_percent', default=0.5, type=float, help='percentage training data to be public')
     parser.add_argument('--distill_percent', default=1, type=float, help='percentage of public data use for distillation')
     parser.add_argument('--selection', action='store_true', help="enable selection method")
-    parser.add_argument('--add_cifar10', action='store_true', help="add cifar10 to distillation")
     parser.add_argument('--finetune', action='store_true', help="finetune the cloud model") # test fine-tune
     parser.add_argument('--finetune_epoch', default=10, type=int, help='number of epochs for finetune')
     parser.add_argument('--finetune_percent', default=0.2, type=float, help='percentage of data to finetune')
-    parser.add_argument('--random_sample', action='store_true', help="each client has random portion of the data")
     parser.add_argument('--sample_percent', default=1, type=float, help='percentage of private data in each worker')
-    parser.add_argument('--private_mixed_percent', default=0, type=float, help='percentage of private data mixed with public data')
 
     args = parser.parse_args()
 
@@ -211,7 +207,6 @@ def distill(
     average_method,
     select_mode,
     selection=False,
-    mixed_private=False,
     lambda_=1,
     )->float: 
     
@@ -272,7 +267,7 @@ def distill(
                             continue
 
                 elif select_mode == "similarity":
-                    pass
+                    raise NotImplementedError("Not support weighted average now")
                     
                 else:
                     logger.debug("No select model provided")
@@ -283,17 +278,15 @@ def distill(
             assert out_t.shape[1] == 100, f"the shape is {out_t.shape}, should be (x, 100)"
             t_max = F.softmax(out_t / T, dim=1)
 
-        #TODO: use an array of edge models instead later
-        # you can use torch.zeros(128,100) to create the placeholder 
+        
         else:
-
+            # Use torch.zeros(128,100) to create the placeholder 
             out_t = torch.zeros((batch_size, total_classes), device=device)
             t_max = torch.zeros((batch_size, total_classes), device=device)
 
             for edge_net in edge_nets:
-                
                 edge_net = edge_net.to(device)
-                
+
                 logger.debug(f"The edge_net.emb is {edge_net.emb}")
                 
                 if hasattr(edge_net, 'emb') and edge_net.emb:
@@ -333,7 +326,6 @@ def run_distill(
     worker_num, 
     device,
     selection,
-    mixed_private,
     prefix
     )->nn.Module:
     
@@ -368,7 +360,6 @@ def run_distill(
                             average_method='equal', 
                             select_mode='guided',
                             selection=selection, 
-                            mixed_private=mixed_private,
                             lambda_=args.lamb)
 
         acc, best_acc = test(epoch, args, cloud, criterion_cloud, testloader_cloud, device, 'cloud')
@@ -384,7 +375,6 @@ def run_distill(
     return cloud
 
 
-    
 if __name__ == "__main__":
 
     args = parse_arguments()
@@ -438,49 +428,36 @@ if __name__ == "__main__":
             
             else:
                 client_classes = int(num_classes * args.split)
-                if args.public_distill and not args.iid:
-
-                    # Do not mix public and private data
-                    # trainloader, testloader = get_worker_data(trainset_private, args, workerid=0)
-                    trainloaders = get_subclasses_loaders(trainset_private, args.num_workers, client_classes, num_workers=4, seed=100)
-                    # trainloader_all = get_subclasses_loaders(trainset, n_clients=1, client_classes=int(args.num_workers * args.client_classes), num_workers=4, seed=100)
-                    testloader_non_iid = get_subclasses_loaders(testset, n_clients=1, client_classes=args.num_workers * client_classes, num_workers=4, seed=100)
-                    # logger.debug(testloader_non_iid[0])
-                    testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, seed=100)
+                
+                # Use public data to perform distillation
+                if args.public_distill:
                     
-                    # if args.private_mixed_percent == 0:
-                    trainloader_all = get_subclasses_loaders(trainset_public, n_clients=1, client_classes=args.num_workers * client_classes, num_workers=4, seed=100)
+                    # Support different ways of non-iid
+                    if not args.iid:
+                        # Split the classes uniformly. 
+                        # The first worker has classes [0,1], the second worker has classes [2,3] etc
+                        if args.partition_mode == 'uniform':
+                            trainloaders = get_subclasses_loaders(trainset_private, args.num_workers, client_classes, num_workers=4, seed=100)
+                            class_select = args.num_workers * client_classes
 
-                    if args.private_mixed_percent != 0:
-                        """
-                        Mix some of the private data with the public data to improve distillation
-                        """                        
-                        # We need to extract the total classes of all the workers
-                        logger.debug(f"Mixed {args.private_mixed_percent} private dataset to the public data")
-                        extract_public = extract_classes(trainset_public, args.split * args.num_workers, workerid=0)
-                        extract_private = extract_classes(trainset_private, args.split * args.num_workers, workerid=0)
+                        if args.partition_mode == 'dirichlet':
+                            extract_trainset = extract_classes(trainset_private, args.split, workerid=0)
+                            # use 1 thread worker instead of 4 in the single gpu case
+                            trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
+                            class_select = client_classes
+                      
+                        testloader_non_iid = get_subclasses_loaders(testset, n_clients=1, client_classes=class_select, num_workers=4, seed=100)
+                        testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, seed=100)                    
+                        trainloader_all = get_subclasses_loaders(trainset_public, n_clients=1, client_classes=args.num_workers * client_classes, num_workers=4, seed=100)
 
-                        logger.debug(f"The length of public is {len(extract_public)} and private is {len(extract_private)}")
-                        mixed_private, _ = split_train_data(extract_private, args.private_mixed_percent)
-                        mixed_loader = get_loader(mixed_private, args)
-
-
-                elif args.public_distill and args.iid:
-                    logger.info(f"Using {int(args.split * 100)}% for iid")
-                    extract_trainset = extract_classes(trainset_private, args.split, workerid=0)
-                    if args.random_sample:
-
-                        logger.info(f"Performing overlap data test")
-                        # start from the full dataset
-                        # trainloaders = [get_loader(extract_trainset, args) for i in range(args.num_workers)]
-                        trainloaders = get_random_loaders(extract_trainset, n_clients=args.num_workers, percent=args.sample_percent, seed=100) 
-
-                    else:
+                    elif args.iid:
+                        logger.info(f"Using {int(args.split * 100)}% for iid")
+                        extract_trainset = extract_classes(trainset_private, args.split, workerid=0)
                         # use 1 thread worker instead of 4 in the single gpu case
                         trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
+                        _, testloader_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
 
-                    _, testloader_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
-                        
+                # Use private data to perform distillation       
                 else:
                     # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
                     trainloaders = get_subclasses_loaders(trainset, args.num_workers, client_classes, num_workers=4, seed=100)
@@ -496,48 +473,6 @@ if __name__ == "__main__":
                 torch.save(trainloader, 'trainloader_first_10cls.pth')
                 torch.save(testloader, 'testloader_first_10cls.pth')
 
-            # two workers
-            if args.two:    
-                logger.info(f"Creating a new loader Using {int(args.split * 100)}% of training data and classifying {int(args.split * 100)}%")               
-                
-                # get worker data is slow, maybe we can get save the data first. 
-                # workerid=1
-                if args.exist_loader:
-                    trainloader_1 = torch.load('trainloader_second_10cls.pth')
-                    testloader_1 = torch.load('testloader_second_10cls.pth')
-                    trainloader_2 = torch.load('trainloader_third_10cls.pth')
-                    testloader_2 = torch.load('testloader_third_10cls.pth')
-                    testloader_20cls = torch.load('testloader_20cls.pth')
-                    testloader_30cls = torch.load('testloader_30cls.pth')
-                    trainloader_30cls = torch.load('trainloader_30cls.pth')
-
-                    logger.debug("Done loading loaders")
-
-                else:
-                    if args.public_distill:
-                        logger.debug("In the public_distill condition")
-                        # trainloader_private, _ = get_worker_data_hardcode(trainset_private, args.num_workers * args.split, workerid=0)
-                        if args.iid:
-                            trainloader_public, testloader_public = get_worker_data_hardcode(trainset_public, args.split, workerid=0)
-                        
-                        else:
-                            trainloader_public, testloader_public = get_worker_data_hardcode(trainset_public, args.num_workers * args.split, workerid=0)
-
-                    else:
-                        logger.debug("In the else condition")
-                        
-                if args.save_loader:
-                    torch.save(trainloader_1, 'trainloader_second_10cls.pth')
-                    torch.save(testloader_1, 'testloader_second_10cls.pth')
-
-                    torch.save(trainloader_2, 'trainloader_third_10cls.pth')
-                    torch.save(testloader_2, 'testloader_third_10cls.pth')
-                    torch.save(trainloader_30cls, 'trainloader_30cls.pth')
-                    torch.save(testloader_20cls_disjoint, 'testloader_20cls_disjoint.pth')
-                    torch.save(testloader_20cls, 'testloader_20cls.pth')
-                    torch.save(testloader_30cls, 'testloader_30cls.pth')
-                    logger.debug("Done saving loaders")
-                    exit()
 
         # use to collect baseline results
         # TODO: simplify the test cases. The test cases are overlapped. 
@@ -552,12 +487,11 @@ if __name__ == "__main__":
             else: # iid case
                 logger.info(f"Using {int(args.split * 100)}% for iid baseline")
                 extract_trainset = extract_classes(trainset, args.split, workerid=0)
-                        
+        
                 # use 1 thread worker instead of 4 in the single gpu case
                 trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
                 # _, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
                 _, testloader_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
-                # pdb.set_trace()
 
         ###########################################################################################
         
@@ -603,15 +537,10 @@ if __name__ == "__main__":
                 logger.debug("Distilling with public data")
                 run_distill(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device, prefix='distill_')
 
-                    
-            if args.add_cifar10:
-                logger.debug("Use cifar10 to distill again")
-                trainloader_cifar10, testloader_cifar10 = get_cifar10_loader(args)
-                run_distill(nets, cloud_net, args, trainloader_cifar10, testloader_public, worker_num=0, device=device, prefix='cifar10_')
-
         else:
             # non-iid case here
             logger.debug(30*'*' + 'Non-iid' + 30*'*')
+        
             logger.debug("Prepare cifar10 as public data")
             trainloader_cifar10, testloader_cifar10 = get_cifar10_loader(args)
 
@@ -623,18 +552,16 @@ if __name__ == "__main__":
                     run_train(nets[i], round, args, trainloaders[i], testloader_non_iid[0], testloaders[i], i, device, 'local', 'edge_' + str(i))
                     logger.debug("Done edge training")
 
-
                 # Get the public data with the specified classes
                 run_distill(nets, 
-                                        cloud_net, 
-                                        args, 
-                                        trainloader_all[0], 
-                                        testloader_non_iid[0], 
-                                        worker_num=0, 
-                                        device=device,
-                                        selection=False, 
-                                        mixed_private=False,
-                                        prefix='distill_')
+                            cloud_net, 
+                            args, 
+                            trainloader_all[0], 
+                            testloader_non_iid[0], 
+                            worker_num=0, 
+                            device=device,
+                            selection=False, 
+                            prefix='distill_')
 
             exit()       
             

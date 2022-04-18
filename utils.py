@@ -18,11 +18,9 @@ from models import *
 import torch.backends.cudnn as cudnn
 from plot_results import *
 
+logger = logging.getLogger('__name__')
+# logger.setLevel('DEBUG')
 
-logger = logging.getLogger(__name__)
-logger.setLevel('DEBUG')
-fmt_str = '%(levelname)s - %(message)s'
-fmt_file = '[%(levelname)s]: %(message)s'
 
 def get_mean_and_std(dataset):
     '''Compute the mean and std value of dataset.'''
@@ -208,6 +206,10 @@ def get_logger_handler(path):
     f_handler.setLevel(logging.DEBUG)
 
     # Create formatters and add it to handlers
+
+    fmt_str = '%(levelname)s - %(message)s'
+    fmt_file = '[%(levelname)s]: %(message)s'
+
     c_format = logging.Formatter(fmt_str)
     f_format = logging.Formatter(fmt_file)
     c_handler.setFormatter(c_format)
@@ -349,3 +351,7 @@ def count_targets(targets):
 
     logger.debug(f"alpha: {alpha}, beta: {beta}, gamma: {gamma}")
     return alpha, beta, gamma 
+
+def test_logging():
+
+    logger.info("Hey there")

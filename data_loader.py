@@ -77,7 +77,7 @@ def split_train_data(train_data, split=0.5):
     public_part = int(split * length)
     private_part = length - public_part
 
-    print(f"Length: {length}; public_part: {public_part}, private_part: {private_part} ")
+    logger.debug(f"Length: {length}; public_part: {public_part}, private_part: {private_part} ")
 
     public, private = torch.utils.data.random_split(train_data, [public_part, private_part])
 
@@ -310,7 +310,7 @@ def get_random_loaders(train_data, n_clients=3, percent=100, batch_size=128, num
     # pdb.set_trace()
     
     for i in range(n_clients):
-        print(f"Samples {i} worker: {len(subset_idcs[i])}")
+        logger.debug(f"Samples {i} worker: {len(subset_idcs[i])}")
 
     client_loaders = [torch.utils.data.DataLoader(subset, 
                                                     batch_size=batch_size, 
