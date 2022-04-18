@@ -317,7 +317,6 @@ def save_figure(path, csv_name):
     plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy', output= path + '/' + 'result.png')
 
 
-
 def check_model_trainable(nets):
     for net in nets:
         for param in net.parameters():

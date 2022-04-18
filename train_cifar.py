@@ -60,7 +60,6 @@ def parse_arguments():
     parser.add_argument('--public_percent', default=0.5, type=float, help='percentage training data to be public')
     parser.add_argument('--distill_percent', default=1, type=float, help='percentage of public data use for distillation')
     parser.add_argument('--selection', action='store_true', help="enable selection method")
-    parser.add_argument('--use_pseudo_labels', action='store_true', help="enable selection method")
     parser.add_argument('--add_cifar10', action='store_true', help="add cifar10 to distillation")
     parser.add_argument('--finetune', action='store_true', help="finetune the cloud model") # test fine-tune
     parser.add_argument('--finetune_epoch', default=10, type=int, help='number of epochs for finetune')
@@ -68,7 +67,6 @@ def parse_arguments():
     parser.add_argument('--random_sample', action='store_true', help="each client has random portion of the data")
     parser.add_argument('--sample_percent', default=1, type=float, help='percentage of private data in each worker')
     parser.add_argument('--private_mixed_percent', default=0, type=float, help='percentage of private data mixed with public data')
-    parser.add_argument('--random_edge', action='store_true', help="randomly select one of the edge model for distill")
 
     args = parser.parse_args()
 
@@ -213,14 +211,11 @@ def distill(
     average_method,
     select_mode,
     selection=False,
-    use_pseudo_labels=False,
-    random_edge=False,
     mixed_private=False,
     lambda_=1,
     )->float: 
     
     logger.debug('\nEpoch: %d' % epoch)
-    logger.debug(f"Selection={selection} random_edge={random_edge}")
 
     cloud_net.train()
     # logger.debug(f"model.train={cloud_net.training}")
@@ -288,9 +283,6 @@ def distill(
             assert out_t.shape[1] == 100, f"the shape is {out_t.shape}, should be (x, 100)"
             t_max = F.softmax(out_t / T, dim=1)
 
-            if use_pseudo_labels:
-                _, pseudo_labels = out_t.max(1)
-
         #TODO: use an array of edge models instead later
         # you can use torch.zeros(128,100) to create the placeholder 
         else:
@@ -298,73 +290,31 @@ def distill(
             out_t = torch.zeros((batch_size, total_classes), device=device)
             t_max = torch.zeros((batch_size, total_classes), device=device)
 
-            # random edge is not needed any more
-            #TODO: remove random_edge case 
-            if random_edge:
-                # randomly select one of the edge device to distill
-                # for a simple test only
-                logger.debug(f"Random edge mode selected")
-                edge_net = random.choice(edge_nets)
+            for edge_net in edge_nets:
+                
                 edge_net = edge_net.to(device)
                 
-                # out_t += edge_net(inputs)
-
-                out_temp_t, _ = edge_net(inputs)
-                out_t += out_temp_t
+                logger.debug(f"The edge_net.emb is {edge_net.emb}")
+                
+                if hasattr(edge_net, 'emb') and edge_net.emb:
+                    out_temp_t, _ = edge_net(inputs)
+                    out_t += out_temp_t
+                
+                else:
+                    out_t += edge_net(inputs)
 
                 t_max += F.softmax(out_t / T, dim=1)
 
-            else:
-                for edge_net in edge_nets:
-                    
-                    edge_net = edge_net.to(device)
-                    
-                    print(f"The edge_net.emb is {edge_net.emb}")
-                    
-                    if hasattr(edge_net, 'emb') and edge_net.emb:
-                        out_temp_t, _ = edge_net(inputs)
-                        out_t += out_temp_t
-                    
-                    else:
-                        out_t += edge_net(inputs)
-
-                    t_max += F.softmax(out_t / T, dim=1)
-
-                if average_method == 'equal':
-                    logger.debug("Equal weights")
-                    # t_max = (t_max_0 + t_max_1 ) / 2
-                    t_max = t_max / num_workers
-                else: # weighted, performance is not good, not used
-                    logger.debug("Not support weighted average now")
-                    # logger.debug(f"Weighted average")
-                    # t_max = alpha * t_max_0 + beta * t_max_1
-
+            if average_method == 'equal':
+                logger.debug("Equal weights")
+                t_max = t_max / num_workers
+            else: # weighted, performance is not good, not used
+                raise NotImplementedError("Not support weighted average now")
 
         loss_kd = kd_fun(s_max, t_max) / batch_size
         loss = loss_fun(out_s, targets)
         
-        if use_pseudo_labels:
-            logger.debug(f"Enable pseudo labels")
-            loss_sd = loss_fun(out_s, pseudo_labels)
-            loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd + lambda_ * loss_sd
-
-        else:
-            # loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
-            # mix the batch of labeled and unlabeled data (11/16)
-            
-
-            ######## Move this to a flag instead. It is confusing here ##########
-            # test for 0% true label without random sampling
-            # true_label_percent = 0.5
-            # alter_factor = 1/true_label_percent
-            # if batch_idx % alter_factor == 0:
-            #     logger.debug(f"Setting lambda to 0")
-            #     lambda_ = 0
-            # else:
-            #     logger.debug(f"Setting lambda to 1")
-            #     lambda_ = 1
-
-            loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
+        loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
 
         loss_kd.backward()
         optimizer.step()
@@ -383,11 +333,9 @@ def run_distill(
     worker_num, 
     device,
     selection,
-    random_edge,
     mixed_private,
     prefix
     )->nn.Module:
-    """Concatenate the three datase from the edge workers together and test distillation with lambda set to 0"""
     
     strtime = get_time()
     list_loss = []
@@ -420,8 +368,6 @@ def run_distill(
                             average_method='equal', 
                             select_mode='guided',
                             selection=selection, 
-                            use_pseudo_labels=args.use_pseudo_labels, 
-                            random_edge = random_edge,
                             mixed_private=mixed_private,
                             lambda_=args.lamb)
 
@@ -687,7 +633,6 @@ if __name__ == "__main__":
                                         worker_num=0, 
                                         device=device,
                                         selection=False, 
-                                        random_edge=False, 
                                         mixed_private=False,
                                         prefix='distill_')
 
