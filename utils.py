@@ -14,6 +14,10 @@ import torch.nn.init as init
 import torch
 import logging
 import datetime
+from models import *
+import torch.backends.cudnn as cudnn
+from plot_results import *
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
@@ -253,6 +257,14 @@ def print_layers(net):
         print(name, param.requires_grad)
 
 
+def save_figure(path, csv_name):
+
+    # pdb.set_trace()
+    data_to_plot = {}
+    data_to_plot['data'] = collect_data(path + '/' + csv_name)
+    print(data_to_plot)
+    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy', output= path + '/' + 'result.png')
+
 def build_model_from_name(name, num_classes, device):
 
     # print(name, type(name))
@@ -296,3 +308,45 @@ def build_model_from_name(name, num_classes, device):
         cudnn.benchmark = True
 
     return net
+
+def save_figure(path, csv_name):
+
+    data_to_plot = {}
+    data_to_plot['data'] = collect_data(path + '/' + csv_name)
+    print(data_to_plot)
+    plot(data_to_plot, 'Iteration', 'Top-1 test accuracy', 'Accuracy', output= path + '/' + 'result.png')
+
+
+
+def check_model_trainable(nets):
+    for net in nets:
+        for param in net.parameters():
+            param.requires_grad = True
+
+        net.train()
+        
+    return nets
+
+
+def count_targets(targets):
+    
+    """
+    Count the number of samples to determine the weights
+    """
+    alpha, beta, gamma = 0, 0, 0
+    batch_size = targets.shape[0]
+    # Now only works for 30 classes
+    for target in targets:
+        if 0 <= target.item() <= 9:
+            alpha += 1
+        elif 10 <= target.item() <= 19:
+            beta += 1
+        else:
+            gamma += 1
+    
+    alpha /= batch_size
+    beta /= batch_size
+    gamma /= batch_size
+
+    logger.debug(f"alpha: {alpha}, beta: {beta}, gamma: {gamma}")
+    return alpha, beta, gamma 
