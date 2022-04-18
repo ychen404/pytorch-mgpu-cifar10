@@ -215,3 +215,84 @@ def check_dir(directory):
 
     if not os.path.exists(directory):
         os.makedirs(directory)    
+
+
+def defrost_net(net):
+    for param in net.parameters():
+        param.requires_grad = True
+    net.train()
+    return net
+
+def freeze_net(net):
+    # freeze the layers of a model
+    for param in net.parameters():
+        param.requires_grad = False
+    # set the teacher net into evaluation mode
+    net.eval()
+    return net
+
+def freeze_except_last_layer(net):
+    # freeze the layers of a model
+    for param in net.parameters():
+        param.requires_grad = False
+    
+    # Resnet18 uses linear instead of fc layer as the last layer
+    # for param in net.fc.parameters():
+    #     param.requires_grad = True
+
+    for param in net.linear.parameters():
+        param.requires_grad = True    
+
+    for name, param in net.named_parameters():
+        print(name, param.requires_grad)
+
+    return net
+
+def print_layers(net):
+    for name, param in net.named_parameters():
+        print(name, param.requires_grad)
+
+
+def build_model_from_name(name, num_classes, device):
+
+    # print(name, type(name))
+    # print(name == 'res8')
+
+    if name == 'res6':
+        net = resnet6(num_classes=num_classes)
+
+    elif name == 'res6_emb':
+        net = resnet6(num_classes=num_classes, emb=True)
+
+    elif name == 'res8':
+        net = resnet8(num_classes=num_classes)    
+
+    elif name == 'res50':
+        net = resnet50(num_classes=num_classes)
+
+    elif name == 'res20':
+        net = resnet20(num_classes=num_classes)
+    
+    elif name == 'res20_emb':
+        net = resnet20(num_classes=num_classes, emb=True)
+
+    elif name == 'res18':
+        net = resnet18(num_classes=num_classes)
+    
+    elif name == 'lenet':
+        net = LeNet()
+
+    elif name =='vgg':
+        net = VGG('VGG19')
+
+    else:
+        NotImplementedError('Not supported model')
+        exit()
+
+    print_total_params(net)
+    net = net.to(device)
+    if device == 'cuda':
+        net = torch.nn.DataParallel(net) # make parallel
+        cudnn.benchmark = True
+
+    return net

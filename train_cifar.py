@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 fmt_str = '%(levelname)s - %(message)s'
 fmt_file = '[%(levelname)s]: %(message)s'
-# best_acc = 0
 
 def parse_arguments():
 
@@ -76,41 +75,7 @@ def parse_arguments():
 
     return args
 
-def defrost_net(net):
-    for param in net.parameters():
-        param.requires_grad = True
-    net.train()
-    return net
 
-def freeze_net(net):
-    # freeze the layers of a model
-    for param in net.parameters():
-        param.requires_grad = False
-    # set the teacher net into evaluation mode
-    net.eval()
-    return net
-
-def freeze_except_last_layer(net):
-    # freeze the layers of a model
-    for param in net.parameters():
-        param.requires_grad = False
-    
-    # Resnet18 uses linear instead of fc layer as the last layer
-    # for param in net.fc.parameters():
-    #     param.requires_grad = True
-
-    for param in net.linear.parameters():
-        param.requires_grad = True    
-
-    for name, param in net.named_parameters():
-        print(name, param.requires_grad)
-
-    return net
-
-def print_layers(net):
-    for name, param in net.named_parameters():
-        print(name, param.requires_grad)
-    
 # Training
 def train(epoch, round, net, criterion, optimizer, trainloader, device):
     logger.debug('\nEpoch: %d' % epoch)
@@ -143,6 +108,7 @@ def train(epoch, round, net, criterion, optimizer, trainloader, device):
     
     return train_loss/(batch_idx+1)
 
+
 def test(epoch, args, net, criterion, testloader, device, msg, save_checkpoint=True):
 
     best_acc = 0
@@ -166,16 +132,13 @@ def test(epoch, args, net, criterion, testloader, device, msg, save_checkpoint=T
             test_loss += loss.item()
             _, predicted = outputs.max(1)
 
-            # logger.debug(f"outputs.max(1): {outputs.max(1)}\n")
             logger.debug(f"predicted: {predicted}\n")
             logger.debug(f"targets: {targets}\n")
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-            # correct += torch.sum(predicted == targets.data).float()            
             logger.debug(f"correct={correct} / total {total}\n")
-            # progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-            #     % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
+
 
     # Save checkpoint.
     #TODO: why not save checkpoint every experiment? 
@@ -198,50 +161,6 @@ def test(epoch, args, net, criterion, testloader, device, msg, save_checkpoint=T
             
     return acc, best_acc
         
-
-def build_model_from_name(name, num_classes, device):
-
-    print(name, type(name))
-    print(name == 'res8')
-
-    if name == 'res6':
-        net = resnet6(num_classes=num_classes)
-
-    elif name == 'res6_emb':
-        net = resnet6(num_classes=num_classes, emb=True)
-
-    elif name == 'res8':
-        net = resnet8(num_classes=num_classes)    
-
-    elif name == 'res50':
-        net = resnet50(num_classes=num_classes)
-
-    elif name == 'res20':
-        net = resnet20(num_classes=num_classes)
-    
-    elif name == 'res20_emb':
-        net = resnet20(num_classes=num_classes, emb=True)
-
-    elif name == 'res18':
-        net = resnet18(num_classes=num_classes)
-    
-    elif name == 'lenet':
-        net = LeNet()
-
-    elif name =='vgg':
-        net = VGG('VGG19')
-
-    else:
-        NotImplementedError('Not supported model')
-        exit()
-
-    print_total_params(net)
-    net = net.to(device)
-    if device == 'cuda':
-        net = torch.nn.DataParallel(net) # make parallel
-        cudnn.benchmark = True
-
-    return net
 
 def save_figure(path, csv_name):
 
