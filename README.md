@@ -1,5 +1,7 @@
 # Multi-GPU training with Pytorch.
 
+Working on the embedding method. 
+
 Let's try easy multi-GPU training with pytorch.
 
 Just adding:
@@ -19,7 +21,6 @@ Should have more than 2GPUs to test it out.
 
 Should scale more than 2 GPUs!
 
-## 詳しい解説と設定など
 https://qiita.com/arutema47/items/2b92f94c734b0a11609d
 
 ## Usage
@@ -36,11 +37,10 @@ python train_cifar10.py
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 python train_cifar10.py
 
-# デフォルトの設定はResnet18となっています。
 
-# Res101で学習する場合
+# Res101
 python train_cifar10.py --net res101
 
-# Res50で学習する場合
+# Res50
 python train_cifar10.py --net res50
 ```
