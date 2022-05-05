@@ -71,9 +71,10 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10):
+    def __init__(self, block, num_blocks, num_classes=10, emb=False):
         super(ResNet, self).__init__()
         self.in_planes = 64
+        self.emb = emb
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3,
                                stride=1, padding=1, bias=False)
@@ -83,7 +84,9 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.linear = nn.Linear(512 * block.expansion, num_classes)
+        self.embDim = 512 * block.expansion
         self.n_channels = [64, 128, 256, 512]
+        
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
@@ -112,13 +115,22 @@ class ResNet(nn.Module):
         feat4 = self.layer4(feat3)
         feat4 = F.relu(feat4)
         pool = F.avg_pool2d(feat4, 4)
-        pool = pool.view(pool.size(0), -1)
-        out = self.linear(pool)
+        # pool = pool.view(pool.size(0), -1)
+        # out = self.linear(pool)
+
+        emb = pool.view(pool.size(0), -1)
+        out = self.linear(emb)
 
         if is_feat:
             return[feat1, feat2, feat3, feat4], pool, out
 
-        return out
+        if self.emb:
+            return out, emb
+        else:
+            return out
+
+    def get_embedding_dim(self):
+        return self.embDim
 
     def get_bn_before_relu(self):
         if isinstance(self.layer1[0], Bottleneck):

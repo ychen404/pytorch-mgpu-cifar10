@@ -178,16 +178,20 @@ class ResNet(nn.Module):
             self.layer3 = self._make_layer(block, 64, layers[2], stride=2)
             self.avgpool = nn.AvgPool2d(8, stride=1)
             self.fc = nn.Linear(64 * block.expansion, num_classes)
+            # return the dimension of the last layer
+            self.embDim = 64 * block.expansion
         
         elif len(layers) == 2:
             self.layer2 = self._make_layer(block, 32, layers[1], stride=2)
             self.avgpool = nn.AvgPool2d(16, stride=1)
             self.fc = nn.Linear(32 * block.expansion, num_classes)
+            self.embDim = 32 * block.expansion
 
         else:
             # layers == 1
             self.avgpool = nn.AvgPool2d(32, stride=1)
             self.fc = nn.Linear(16 * block.expansion, num_classes)
+            self.embDim = 16 * block.expansion
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -242,6 +246,9 @@ class ResNet(nn.Module):
 
         # return x
         # return x if not self.emb else x, emb
+
+    def get_embedding_dim(self):
+        return self.embDim
 
 
 class PreAct_ResNet(nn.Module):

@@ -2,6 +2,7 @@
 '''Train CIFAR10 with PyTorch.'''
 
 from __future__ import print_function
+from xml.dom import NotSupportedErr
 
 import torch
 import torch.nn as nn
@@ -22,6 +23,8 @@ import itertools
 import pdb
 from plot_results import *
 import random
+from copy import deepcopy
+
 
 logger = logging.getLogger('__name__')
 logger.setLevel('DEBUG')
@@ -50,7 +53,6 @@ def parse_arguments():
     parser.add_argument('--temperature', default=1, type=float, help='temperature for distillation')
     parser.add_argument('--optimizer', default='sgd')
     parser.add_argument('--partition_mode', default='dirichlet')
-    parser.add_argument('--iid', action='store_true', help="test iid case")
     parser.add_argument('--public_distill', action='store_true', help="use public data to distill")
     parser.add_argument('--exist_loader', action='store_true', help="there is exist loader")
     parser.add_argument('--save_loader', action='store_true', help="save trainloaders")
@@ -58,7 +60,11 @@ def parse_arguments():
     parser.add_argument('--lamb', default=0.5, type=float, help='lambda for distillation')
     parser.add_argument('--public_percent', default=0.5, type=float, help='percentage training data to be public')
     parser.add_argument('--distill_percent', default=1, type=float, help='percentage of public data use for distillation')
+
+    ######################### Aggregation parameters #########################
     parser.add_argument('--selection', action='store_true', help="enable selection method")
+    parser.add_argument('--dlc', action='store_true', help="enable selection method")
+    parser.add_argument('--num_drop', default=1, type=int, help='number of edges to be dropped')
     parser.add_argument('--finetune', action='store_true', help="finetune the cloud model") # test fine-tune
     parser.add_argument('--finetune_epoch', default=10, type=int, help='number of epochs for finetune')
     parser.add_argument('--finetune_percent', default=0.2, type=float, help='percentage of data to finetune')
@@ -155,7 +161,7 @@ def test(epoch, args, net, criterion, testloader, device, msg, save_checkpoint=T
     return acc, best_acc
         
 
-def run_train(net, round, args, trainloader, testloader, testloader_local, worker_num, device, mode, msg):
+def run_train(net, round, args, trainloader, testloader, testloader_local, worker_num, device, vary_epoch, mode, msg):
     """
     This is the wrapper function that calls train() and test() for training all the edge models.  
     Merge this with run_train()
@@ -165,7 +171,6 @@ def run_train(net, round, args, trainloader, testloader, testloader_local, worke
     mode = local -> save local accuracy
     model = None -> don't save local accuracy
     """
-    
     
     list_loss = []
     strtime = get_time()
@@ -177,7 +182,12 @@ def run_train(net, round, args, trainloader, testloader, testloader_local, worke
     csv_name_local = 'acc_'  + 'worker_' + str(worker_num) + '_' + strtime + '_' + 'local' + '.csv'
     path = 'results/' + args.workspace
         
-    for epoch in range(start_epoch, start_epoch + args.epoch):        
+    # Simple test (remove later)
+    if vary_epoch:
+        args.epoch = 1
+
+    # for epoch in range(start_epoch, start_epoch + args.epoch):   
+    for epoch in range(args.epoch):     
         trainloss = train(epoch, round, net, criterion_edge, optimizer_edge, trainloader, device)
         acc, best_acc = test(epoch, args, net, criterion_edge, testloader, device, msg)
         logger.debug(f"The result is: {acc}")
@@ -204,8 +214,11 @@ def distill(
     num_workers,
     split,
     distill_percent, 
+    dataset,
     average_method,
     select_mode,
+    drop_leastconfident,
+    num_drop,
     selection=False,
     lambda_=1,
     )->float: 
@@ -222,7 +235,13 @@ def distill(
     T = 1
 
     # consider cifar100 only for now
-    total_classes = 100
+    if dataset == 'cifar100':
+        total_classes = 100 
+    elif dataset == 'cifar10':
+        total_classes = 10
+    else:
+        raise NotImplementedError("Not supported dataset")
+
     worker_ids = [x for x in range(num_workers)]
     num_classes = int(split * total_classes)
     bounds = []
@@ -238,7 +257,6 @@ def distill(
     for batch_idx, (inputs, targets) in enumerate(trainloader_concat):
         inputs, targets = inputs.to(device), targets.to(device)
         # logger.debug(f"device = {device}")
-        alpha, beta, gamma = count_targets(targets)
         optimizer.zero_grad()
         counter += 1
         logger.debug(f"Counter: {counter}")
@@ -272,35 +290,118 @@ def distill(
                 else:
                     logger.debug("No select model provided")
                     
-
             logger.debug(f"len out_t_temp: {len(out_t_temp)}")
             out_t = torch.cat(out_t_temp, dim=0) # use dim 0 to stack the tensors
             assert out_t.shape[1] == 100, f"the shape is {out_t.shape}, should be (x, 100)"
             t_max = F.softmax(out_t / T, dim=1)
-
         
         else:
-            # Use torch.zeros(128,100) to create the placeholder 
+            # Use torch.zeros(128,100) to create the placeholder
             out_t = torch.zeros((batch_size, total_classes), device=device)
             t_max = torch.zeros((batch_size, total_classes), device=device)
-
-            for edge_net in edge_nets:
+            
+            # create place holder for emb method
+            batch_memory = [-1] * batch_size
+            edge_idx = 0
+            norm_idx = 1
+            output_idx = 2
+            target_idx = 3
+            nLab = total_classes
+            
+            emb_flag = False
+            
+            for i, edge_net in enumerate(edge_nets):
                 edge_net = edge_net.to(device)
 
-                logger.debug(f"The edge_net.emb is {edge_net.emb}")
+                # logger.debug(f"The edge_net.emb flag is {edge_net.emb}")
                 
                 if hasattr(edge_net, 'emb') and edge_net.emb:
-                    out_temp_t, _ = edge_net(inputs)
-                    out_t += out_temp_t
-                
-                else:
+                    emb_flag = True
+                    negative_one, replaced = 0, 0
+                    for idx, (input, target) in enumerate(zip(inputs, targets)):
+                        input = input.unsqueeze(0)
+                        edge_out, emb = edge_net(input)
+                        # print(f"edge_out shape: {edge_out.shape}")
+                        embDim = edge_net.get_embedding_dim()
+                                        
+                        emb = emb.data.cpu().numpy()
+                        batchProbs = F.softmax(edge_out, dim=1).data.cpu().numpy()
+                        # print(batchProbs)
+                        maxInds = np.argmax(batchProbs,1)
+                        # print(maxInds)
+
+                        size = 1
+                        embedding = np.zeros([size, embDim * nLab])
+                        # y = inputs
+                        idxs = np.arange(size)
+                        # pdb.set_trace()
+                        for j in range(size):
+                            for c in range(nLab):
+                                if c == maxInds[j]:
+                                    embedding[idxs[j]][embDim * c : embDim * (c+1)] = deepcopy(emb[j]) * (1 - batchProbs[j][c])
+                                else:
+                                    embedding[idxs[j]][embDim * c : embDim * (c+1)] = deepcopy(emb[j]) * (-1 * batchProbs[j][c])
+
+                        emb_norm = np.linalg.norm(embedding, 2)
+                        
+                        if drop_leastconfident:
+
+                            # Used for drop least confidence
+                            # Create memory for each sample in each batch of each edge worker
+                            # Use the norm of the second to the last layer output as an indicator
+                            # 'num_drop' determines how many edge workers are dropping
+                            raise NotImplementedError("Not support yet")                                    
+
+                        
+                        else:
+                            
+                            if batch_memory[idx] == -1:
+                                batch_memory[idx] = (i, emb_norm, edge_out, target)
+                                # negative_one += 1
+                                # print(f"new")
+                            else: 
+                                if  emb_norm < batch_memory[idx][norm_idx]:
+                                    batch_memory[idx] = (i, emb_norm, edge_out, target)
+                                    # print("replace")
+                                    replaced += 1
+
+                else:                    
                     out_t += edge_net(inputs)
 
-                t_max += F.softmax(out_t / T, dim=1)
+            if emb_flag:
+                logger.debug(f"emb mode")
+                stack_out = []
+                emb_acc = 0
+                emb_correct = 0
+                
+                for b in batch_memory:
+                    # logger.debug(f"i: {b[edge_idx]} target: {b[target_idx]}")
+                    stack_out.append(b[output_idx])
+                    # if b[target_idx] == 0 and b[edge_idx] == 0 \
+                    #     or b[target_idx] == 1 and b[edge_idx] == 0 \
+                    #         or b[target_idx] == 2 and b[edge_idx] == 1 \
+                    #             or b[target_idx] == 3 and b[edge_idx] == 1:
+                    #     emb_correct += 1
 
+                # logger.debug(f"Num emb correct: {emb_correct}, size: {len(batch_memory)}, Emb acc: {100 * emb_correct/len(batch_memory)}")
+                not_replaced = len(batch_memory) - replaced
+                logger.debug(f"Not replaced: {not_replaced}, replaced: {replaced}, not_replaced/total: {not_replaced/len(batch_memory)}")
+
+                out_t = torch.cat(stack_out, dim=0) # use dim 0 to stack the tensors
+                # print(f"out_t.shape {out_t.shape}")
+            
+            t_max += F.softmax(out_t / T, dim=1)
+            
             if average_method == 'equal':
                 logger.debug("Equal weights")
                 t_max = t_max / num_workers
+            
+            elif average_method == 'grad':
+                # Use gradient magnitude to select workers
+                # So nothing needs to be done here for now.
+                # We may need to add some additional operations 
+                logger.debug("Grad mode")
+
             else: # weighted, performance is not good, not used
                 raise NotImplementedError("Not support weighted average now")
 
@@ -357,8 +458,11 @@ def run_distill(
                             args.num_workers,
                             args.split,
                             args.distill_percent,
-                            average_method='equal', 
+                            dataset=args.dataset,
+                            average_method='grad', 
                             select_mode='guided',
+                            drop_leastconfident=args.dlc,
+                            num_drop=args.num_drop,
                             selection=selection, 
                             lambda_=args.lamb)
 
@@ -379,16 +483,15 @@ if __name__ == "__main__":
 
     args = parse_arguments()
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-    start_epoch = 0  # start from epoch 0 or last checkpoint epoch
+    # start_epoch = 0  # start from epoch 0 or last checkpoint epoch
     torch.manual_seed(0)
-    # print(args)
+    print(args)
 
     root = 'results/' + args.workspace
     check_dir(root)
     c_handler, f_handler = get_logger_handler(root + '/output.log')
     logger.addHandler(c_handler)
     logger.addHandler(f_handler)
-
     logger.info(args)
     
     # Data
@@ -396,119 +499,117 @@ if __name__ == "__main__":
     num_classes = 10 if args.dataset == 'cifar10' else 100
 
     if args.dataset == 'cifar10':
-        trainloader, testloader = get_cifar10_loader(args)
+        # trainloader, testloader = get_cifar10_loader(args, data_only=False)
+        logger.info('==> CIFAR-10')
+        trainset, testset = get_cifar10()
 
-    else:
+    elif args.dataset == 'cifar100':
         logger.info('==> CIFAR-100')
         trainset, testset = get_cifar100()
         transform_test = get_cifar100_transfromtest()
+        # trainset, testset = get_cifar10()
+    else:
+        raise NotImplementedError("Not supported dataset")
 
-        if args.public_distill: 
-            trainset_public, trainset_private = split_train_data(trainset, args.public_percent)
+        # trainset, testset = get_cifar10_loader(args, data_only=True)
 
-            # Use 10% of the public dataset
-            if args.distill_percent != 1:
-                
-                # do notthing for now (moved insided the distillation function)
-                logger.info(f"The distill percent is {args.distill_percent}")
+    if args.public_distill: 
+        trainset_public, trainset_private = split_train_data(trainset, args.public_percent)
 
+        # Use 10% of the public dataset
+        if args.distill_percent != 1:
+            # do notthing for now (moved insided the distillation function)
+            logger.info(f"The distill percent is {args.distill_percent}")
 
-        if args.split != 0 and not args.split_classes:
-            logger.info(f"Using {int(args.split * 100)}% of training data, classifying all classes")
-            trainset_a, trainset_b = split_train_data(trainset, args.split)
-            trainloader = torch.utils.data.DataLoader(trainset_a, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    if args.split != 1 and not args.split_classes:
+        logger.info(f"Using {int(args.split * 100)}% of training data, classifying all classes")
+        trainset_a, trainset_b = split_train_data(trainset, args.split)
+        trainloader = torch.utils.data.DataLoader(trainset_a, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    
+    elif args.split != 1 and args.split_classes and not args.baseline:
+        # Use all data
+        # logger.info(f"is it here Using {int(args.split * 100)}% of training data and classifying {int(args.split * 100)}%")
+        logger.info(f"is it here Using {int(args.split * 100)}% of training data and classifying {int(args.split * 100)}%")
+
+        if args.exist_loader:
+            trainloader = torch.load('trainloader_first_10cls.pth')
+            testloader = torch.load('testloader_first_10cls.pth')
         
-        elif args.split != 0 and args.split_classes and not args.baseline:
-            # Use all data
-            logger.info(f"is it here Using {int(args.split * 100)}% of training data and classifying {int(args.split * 100)}%")
-
-            if args.exist_loader:
-                trainloader = torch.load('trainloader_first_10cls.pth')
-                testloader = torch.load('testloader_first_10cls.pth')
-            
-            else:
-                client_classes = int(num_classes * args.split)
-                
-                # Use public data to perform distillation
-                if args.public_distill:
-                    
-                    # Support different ways of non-iid
-                    if not args.iid:
-                        # Split the classes uniformly. 
-                        # The first worker has classes [0,1], the second worker has classes [2,3] etc
-                        if args.partition_mode == 'uniform':
-                            trainloaders = get_subclasses_loaders(trainset_private, args.num_workers, client_classes, num_workers=4, seed=100)
-                            class_select = args.num_workers * client_classes
-
-                        if args.partition_mode == 'dirichlet':
-                            extract_trainset = extract_classes(trainset_private, args.split, workerid=0)
-                            # use 1 thread worker instead of 4 in the single gpu case
-                            trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
-                            class_select = client_classes
-                      
-                        testloader_non_iid = get_subclasses_loaders(testset, n_clients=1, client_classes=class_select, num_workers=4, seed=100)
-                        testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, seed=100)                    
-                        trainloader_all = get_subclasses_loaders(trainset_public, n_clients=1, client_classes=args.num_workers * client_classes, num_workers=4, seed=100)
-
-                    elif args.iid:
-                        logger.info(f"Using {int(args.split * 100)}% for iid")
-                        extract_trainset = extract_classes(trainset_private, args.split, workerid=0)
-                        # use 1 thread worker instead of 4 in the single gpu case
-                        trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
-                        _, testloader_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
-
-                # Use private data to perform distillation       
-                else:
-                    # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
-                    trainloaders = get_subclasses_loaders(trainset, args.num_workers, client_classes, num_workers=4, seed=100)
-                    trainloader_all = get_subclasses_loaders(trainset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, seed=100)
-
-                    # _, testloader_non_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
-                    testloader_non_iid = get_subclasses_loaders(testset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, seed=100)
-
-                    # logger.debug(testloader_non_iid[0])
-                    testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, seed=100)
-
-            if args.save_loader:
-                torch.save(trainloader, 'trainloader_first_10cls.pth')
-                torch.save(testloader, 'testloader_first_10cls.pth')
-
-
-        # use to collect baseline results
-        # TODO: simplify the test cases. The test cases are overlapped. 
-        # The iid case will never got to run if I don't comment out the large chunk of code above
-        
-        #################################### For baseline test ####################################
-        elif args.split != 0 and args.baseline:
-            if not args.iid:
-                logger.info(f"Using {int(args.split * 100)}% for simple baseline")
-                trainloader, testloader = get_worker_data(trainset, args, workerid=0)
-
-            else: # iid case
-                logger.info(f"Using {int(args.split * 100)}% for iid baseline")
-                extract_trainset = extract_classes(trainset, args.split, workerid=0)
-        
-                # use 1 thread worker instead of 4 in the single gpu case
-                trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
-                # _, testloader_30cls = get_worker_data_hardcode(trainset, 0.3, workerid=0)
-                _, testloader_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
-
-        ###########################################################################################
-        
-        elif args.split == 0:
-            logger.info(f"Using full training data")
-            trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=4)
-            testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
-            testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False, num_workers=4)
-
         else:
-            logger.info('Please check the data split options')
-            exit()
+            client_classes = int(num_classes * args.split) 
+            logger.info(f"client classes: {client_classes}")
+            
+            # Use public data to perform distillation
+            if args.public_distill:
+                
+                # Split the classes uniformly. 
+                # The first worker has classes [0,1], the second worker has classes [2,3] etc
+                if args.partition_mode == 'uniform':
+                    trainloaders = get_subclasses_loaders(trainset_private, args.num_workers, client_classes, num_workers=4, seed=100)
+                    class_select = args.num_workers * client_classes
+
+                if args.partition_mode == 'dirichlet':
+                    
+                    s = args.split if args.split == 1 else args.split * args.num_workers
+                    extract_trainset = extract_classes(trainset_private, s, dataset=args.dataset, workerid=0)
+                    
+                    # use 1 thread worker instead of 4 in the single gpu case
+                    trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
+                    class_select = client_classes * args.num_workers
+
+                logger.info(f"Cloud Test data")
+                testloader_cloud = get_subclasses_loaders(testset, n_clients=1, client_classes=class_select, num_workers=4, seed=100)
+
+                logger.info(f"Edge Test data")
+                
+                # use all the test data
+                # no need to use the get_subclasses_loaders function
+                # TODO: Is it still necessary to make multiple copies of the testloader
+                if args.split == 1: 
+                    testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False, num_workers=4)
+                    testloaders = [testloader for _ in range(args.num_workers)]
+                else:
+                    testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, seed=100)
+                
+                logger.info(f"Cloud Train loader")
+                trainloader_cloud = get_subclasses_loaders(trainset_public, n_clients=1, client_classes=args.num_workers * client_classes, num_workers=4, seed=100)
+
+            # Use private data to perform distillation       
+            else:
+                # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
+                trainloaders = get_subclasses_loaders(trainset, args.num_workers, client_classes, num_workers=4, seed=100)
+                trainloader_cloud = get_subclasses_loaders(trainset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, seed=100)
+
+                # _, testloader_non_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
+                testloader_cloud = get_subclasses_loaders(testset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, seed=100)
+
+                # logger.debug(testloader_non_iid[0])
+                testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, seed=100)
+
+        if args.save_loader:
+            torch.save(trainloader, 'trainloader_first_10cls.pth')
+            torch.save(testloader, 'testloader_first_10cls.pth')
+
+
+    # use to collect baseline results
+    # TODO: simplify the test cases. The test cases are overlapped. 
+    
+    #################################### For baseline test ####################################
+    elif args.split != 1 and args.baseline:
+        logger.info(f"Using {int(args.split * 100)}% for simple baseline")
+        trainloader, testloader = get_worker_data(trainset, args, workerid=0)
+
+    ###########################################################################################
+
+    else:
+        logger.info('Please check the data split options')
+        exit()
 
     # Model
     logger.debug('==> Building model..')
 
     nets = []
+
     for i in range(args.num_workers):
         net = build_model_from_name(args.net, num_classes, device)
         nets.append(net)
@@ -516,53 +617,30 @@ if __name__ == "__main__":
     cloud_net = build_model_from_name(args.cloud, num_classes, device)
 
     if args.resume:
+        # load edge checkpoints
+        ckpt_paths = ['results/edge_ckpts/edge_0_ckpt.t7', 'results/edge_ckpts/edge_1_ckpt.t7']
+        for i in range(args.num_workers):
+            nets[i] = load_edge_checkpoint_fullpath(nets[i], ckpt_paths[i])
 
-        nets[1] = load_edge_checkpoint_fullpath(nets[1], 'results/public_percent_0.5_2_cls_adam_lambda_1/checkpoint/edge_1_ckpt.t7')
-    else:
-        if args.iid:
-            """
-            commented out the unnecessary trainings. It's time to merge iterative and seperate together?
-            Starting from the iid case using public data to distill 
-            """
-            # run_train(nets[1], args, trainloaders[1], testloader_iid, 1, device, 'edge_1')
-
-            for round in range(args.num_rounds):
-                
-                logger.debug(f"############# round {round} #############")
-                nets = check_model_trainable(nets)
-                for i in range(args.num_workers):
-                
-                    run_train(nets[i], round, args, trainloaders[i], testloader_iid, i, device, 'None', 'edge_' + str(i)) # Don't need to save local accuracy
-
-                logger.debug("Distilling with public data")
-                run_distill(nets, cloud_net, args, trainloader_public, testloader_public, worker_num=0, device=device, prefix='distill_')
-
-        else:
-            # non-iid case here
-            logger.debug(30*'*' + 'Non-iid' + 30*'*')
-        
-            logger.debug("Prepare cifar10 as public data")
-            trainloader_cifar10, testloader_cifar10 = get_cifar10_loader(args)
-
-            for round in range(args.num_rounds):        
-                logger.debug(f"############# round {round} #############")
-                nets = check_model_trainable(nets)
-                for i in range(args.num_workers):
+    for round in range(args.num_rounds):        
+        logger.debug(f"############# round {round} #############")
+        nets = check_model_trainable(nets)
+        for i in range(args.num_workers):
+            if not args.resume:
+                if i == 0: # test training only the first edge
                     logger.debug(f"{args.num_workers}, {i}")
-                    run_train(nets[i], round, args, trainloaders[i], testloader_non_iid[0], testloaders[i], i, device, 'local', 'edge_' + str(i))
+                    run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
                     logger.debug("Done edge training")
-
-                # Get the public data with the specified classes
-                run_distill(nets, 
-                            cloud_net, 
-                            args, 
-                            trainloader_all[0], 
-                            testloader_non_iid[0], 
-                            worker_num=0, 
-                            device=device,
-                            selection=False, 
-                            prefix='distill_')
-
-            exit()       
-            
-    logger.debug(30*'*' + 'Done training workers' + 30*'*')
+                else:
+                    run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, True, 'local', 'edge_' + str(i))
+                                
+        # Get the public data with the specified classes
+        run_distill(nets, 
+                    cloud_net, 
+                    args, 
+                    trainloader_cloud, 
+                    testloader_cloud, 
+                    worker_num=0, 
+                    device=device,
+                    selection=args.selection, 
+                    prefix='distill_')

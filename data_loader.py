@@ -18,8 +18,7 @@ logger.addHandler(c_handler)
 c_format = logging.Formatter(fmt_str)
 c_handler.setFormatter(c_format)
 
-
-def get_cifar10_loader(args):
+def get_cifar10_loader(args, data_only=False):
     
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
@@ -41,7 +40,34 @@ def get_cifar10_loader(args):
 
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-    return trainloader, testloader
+    if data_only:
+        return trainset, testset
+    else:
+        return trainloader, testloader
+
+
+
+
+def get_cifar10():
+    
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
+    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
+
+
+    return trainset, testset
+
 
 def get_cifar100():
 
@@ -83,19 +109,25 @@ def split_train_data(train_data, split=0.5):
 
     return public, private
 
-def extract_classes(train_data, split, workerid=0):
+def extract_classes(train_data, split, dataset='cifar100', workerid=0):
 
     # we can change this to go through the data once and return all the classes for all the workers
     classes = []
     # total_classes = int(max(train_data.targets) + 1)
-    total_classes = 100    
+    
+    
+    if dataset == 'cifar100':
+        total_classes = 100    
+    elif dataset == 'cifar10':
+        total_classes = 10
+    
     num_classes = int(total_classes * split)
     # upper = int(max(train_data.targets) * split)
     upper = int(total_classes * split)
     # print(f"Upper: {upper}")
     start = workerid * num_classes + 0
     end = workerid * num_classes + upper
-    
+    # pdb.set_trace()
     logger.debug(f"Worker: {workerid}; start: {start}; end: {end}; num_classes: {num_classes}")
 
     # Pay attention to the bounds
@@ -233,6 +265,7 @@ def split_uniform(labels, n_clients, client_classes, seed=0):
                 if idx == client_classes * i + cc:
                     client_idcs[i] += [c]
 
+    # pdb.set_trace()
     client_idcs = [np.concatenate(idcs) for idcs in client_idcs]
 
     print_split(client_idcs, labels)
@@ -332,6 +365,7 @@ def get_subclasses_loaders(train_data, n_clients=3, client_classes=2, batch_size
     else:
         train_data_targets = train_data.targets
 
+    
     subset_idcs = split_uniform(train_data_targets, n_clients, client_classes, seed=seed)
     client_data = [torch.utils.data.Subset(train_data, subset_idcs[i]) for i in range(n_clients)]
 
@@ -340,4 +374,6 @@ def get_subclasses_loaders(train_data, n_clients=3, client_classes=2, batch_size
                                                 shuffle=True, 
                                                 num_workers=num_workers, 
                                                 pin_memory=True) for subset in client_data]
-    return client_loaders
+
+    return client_loaders[0] if len(client_loaders) == 1 else client_loaders
+    # return client_loaders

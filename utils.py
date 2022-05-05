@@ -292,7 +292,9 @@ def build_model_from_name(name, num_classes, device):
 
     elif name == 'res18':
         net = resnet18(num_classes=num_classes)
-    
+    elif name == 'res18_emb':
+        net = resnet18(num_classes=num_classes, emb=True)
+
     elif name == 'lenet':
         net = LeNet()
 
@@ -300,8 +302,8 @@ def build_model_from_name(name, num_classes, device):
         net = VGG('VGG19')
 
     else:
-        NotImplementedError('Not supported model')
-        exit()
+        raise NotImplementedError
+        
 
     print_total_params(net)
     net = net.to(device)
