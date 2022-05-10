@@ -57,6 +57,7 @@ def parse_arguments():
     parser.add_argument('--save_loader', action='store_true', help="save trainloaders")
     parser.add_argument('--alpha', default=100, type=float, help='alpha for dirichle partition')
     parser.add_argument('--lamb', default=0.5, type=float, help='lambda for distillation')
+    parser.add_argument('--temp', default=1, type=float, help='temperature for distillation')
     parser.add_argument('--public_percent', default=0.5, type=float, help='percentage training data to be public')
     parser.add_argument('--distill_percent', default=1, type=float, help='percentage of public data use for distillation')
     parser.add_argument('--vary_epoch', action='store_true', help="change the number of local epochs of edges")
@@ -222,6 +223,7 @@ def distill(
     num_drop,
     selection=False,
     lambda_=1,
+    temperature_=1,
     )->float: 
     
     logger.debug('\nEpoch: %d' % epoch)
@@ -245,14 +247,14 @@ def distill(
         emb_norm = np.linalg.norm(embedding, 2)
 
         return emb_norm
-
+    
 
     cloud_net.train()
     # logger.debug(f"model.train={cloud_net.training}")
     train_loss = 0
     loss_fun = nn.CrossEntropyLoss()
     kd_fun = nn.KLDivLoss(reduction='sum')
-    T = 1
+    T = temperature_
 
     # consider cifar100 only for now
     if dataset == 'cifar100':
@@ -271,16 +273,16 @@ def distill(
         bounds.append([start, end])
 
     counter = 0
-    logger.debug(f"Lambda: {lambda_}")
+    # logger.debug(f"Lambda: {lambda_}")
     for batch_idx, (inputs, targets) in enumerate(trainloader_concat):
         inputs, targets = inputs.to(device), targets.to(device)
         # logger.debug(f"device = {device}")
         optimizer.zero_grad()
         counter += 1
-        logger.debug(f"Counter: {counter}")
+        # logger.debug(f"Counter: {counter}")
         out_s = cloud_net(inputs)
 
-        batch_size = out_s.shape[0]
+        size_curr_batch = out_s.shape[0]
         s_max = F.log_softmax(out_s / T, dim=1)
 
         out_t_temp = []
@@ -316,14 +318,20 @@ def distill(
         
         else:
             # Use torch.zeros(128,100) to create the placeholder
-            out_t = torch.zeros((batch_size, total_classes), device=device)
-            t_max = torch.zeros((batch_size, total_classes), device=device)
+            out_t = torch.zeros((size_curr_batch, total_classes), device=device)
+            t_max = torch.zeros((size_curr_batch, total_classes), device=device)
             
             # create place holder for emb method
-            batch_memory = [-1] * batch_size
+            batch_memory = [-1] * size_curr_batch
             norm_idx = 1
             output_idx = 2
-            save_all_output = [[] for _ in range(batch_size)]
+
+            save_all_output = [[] for _ in range(len(inputs))]
+
+            
+            # The output size of each sample is torch.Size([1, 10]) for cifar10
+            num_left_edge = len(edge_nets) - num_drop
+            temp_res = torch.empty((num_left_edge, total_classes), device=device)
 
             emb_flag = False
             # pdb.set_trace()
@@ -334,7 +342,7 @@ def distill(
                     input = input.unsqueeze(0)
 
                     for i, edge_net in enumerate(edge_nets):
-                        logger.debug(f"Processing the {i} edge")
+                        # logger.debug(f"Processing the {i} edge")
 
                         if hasattr(edge_net, 'emb') and edge_net.emb:
 
@@ -345,16 +353,22 @@ def distill(
                             
                             save_all_output[idx].append((emb_norm, edge_out))
 
-                    filtered_output = save_all_output[idx] # save the outputs from a batch 
-                    filtered_output.sort(key = lambda x : x[0]) # use the emb_norm to sort
+                    sorted_output = save_all_output[idx] # save the outputs from a batch 
+                    sorted_output.sort(key = lambda x : x[0]) # use the emb_norm to sort
+                    
+                    for i, e in enumerate(sorted_output[:-num_drop]):
+                        temp_res[i] = e[1] # the 1st idx in e is the model output
+                    
+                    # Calculate the average of the output of each sample
+                    # Each output is torch.size([1,10])
+                    # Use dim=0, the size of the mean is torch.size([10]), use keepdim to maintain the torch.size([1, 10])
 
-                    temp_res = []
-                    for e in filtered_output[:-num_drop]:
-                        temp_res.append(e[1]) # the 1st idx in e is the model output
-                        out_t = torch.cat(temp_res, dim=0) # use dim 0 to stack the tensors
-                        logger.debug(f"The out_t shape is {out_t.shape}")
+                    out_t_temp.append(temp_res.mean(dim=0, keepdim=True))
+                
+                out_t = torch.cat(out_t_temp, dim=0) # use dim 0 to stack the tensors
+                # logger.debug(f"out_t shape: {out_t.shape}")
 
-            #### Calculate model outputs from all edge models
+            #### Calculate model outputs from all edge models without dropping
             else:
                 for i, edge_net in enumerate(edge_nets):
                     edge_net = edge_net.to(device)
@@ -407,7 +421,7 @@ def distill(
             #         logger.debug(f"Not replaced: {not_replaced}, replaced: {replaced}, not_replaced/total: {not_replaced/len(batch_memory)}")
 
             #     out_t = torch.cat(stack_out, dim=0) # use dim 0 to stack the tensors
-                
+
             t_max += F.softmax(out_t / T, dim=1)
             
             if average_method == 'equal':
@@ -418,12 +432,13 @@ def distill(
                 # Use gradient magnitude to select workers
                 # So nothing needs to be done here for now.
                 # We may need to add some additional operations 
-                logger.debug("Grad mode")
+                # logger.debug("Grad mode")
+                pass
 
             else: 
                 raise NotImplementedError("Not support weighted average now")
 
-        loss_kd = kd_fun(s_max, t_max) / batch_size
+        loss_kd = kd_fun(s_max, t_max) / size_curr_batch
         loss = loss_fun(out_s, targets)
         
         loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
@@ -482,7 +497,8 @@ def run_distill(
                             drop_leastconfident=args.dlc,
                             num_drop=args.num_drop,
                             selection=selection, 
-                            lambda_=args.lamb)
+                            lambda_=args.lamb,
+                            temperature_=args.temp)
 
         acc, best_acc = test(epoch, args, cloud, criterion_cloud, testloader_cloud, device, 'cloud')
 
