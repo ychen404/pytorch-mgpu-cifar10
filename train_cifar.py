@@ -549,7 +549,6 @@ if __name__ == "__main__":
 
     if args.public_distill: 
         trainset_public, trainset_private = split_train_data(trainset, args.public_percent)
-
         # Use 10% of the public dataset
         if args.distill_percent != 1:
             # do notthing for now (moved insided the distillation function)
@@ -577,48 +576,51 @@ if __name__ == "__main__":
             if args.public_distill:
                 
                 # Split the classes uniformly. 
-                # The first worker has classes [0,1], the second worker has classes [2,3] etc
+                # The first worker has classes [0,1], the second worker has classes [2,3]
+                # Edge data is non-overlapped
                 if args.partition_mode == 'uniform':
-                    trainloaders = get_subclasses_loaders(trainset_private, args.num_workers, client_classes, num_workers=4, seed=100)
+                    trainloaders = get_subclasses_loaders(trainset_private, args.num_workers, client_classes, num_workers=4, non_overlapped=True, seed=100)
                     class_select = args.num_workers * client_classes
 
                 if args.partition_mode == 'dirichlet':
                     
-                    s = args.split if args.split == 1 else args.split * args.num_workers
-                    extract_trainset = extract_classes(trainset_private, s, dataset=args.dataset, workerid=0)
-                    
+                    # s = args.split if args.split == 1 else args.split * args.num_workers
+                    extract_trainset = extract_classes(trainset_private, args.split, dataset=args.dataset, workerid=0)
                     # use 1 thread worker instead of 4 in the single gpu case
                     trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
-                    class_select = client_classes * args.num_workers
+                    class_select = client_classes
+                    # pdb.set_trace()
 
                 logger.info(f"Cloud Test data")
-                testloader_cloud = get_subclasses_loaders(testset, n_clients=1, client_classes=class_select, num_workers=4, seed=100)
+                testloader_cloud = get_subclasses_loaders(testset, n_clients=1, client_classes=class_select, num_workers=4, non_overlapped=True, seed=100)
 
                 logger.info(f"Edge Test data")
                 
-                # use all the test data
-                # no need to use the get_subclasses_loaders function
-                # TODO: Is it still necessary to make multiple copies of the testloader
-                if args.split == 1: 
-                    testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False, num_workers=4)
-                    testloaders = [testloader for _ in range(args.num_workers)]
-                else:
-                    testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, seed=100)
-                
-                logger.info(f"Cloud Train loader")
-                trainloader_cloud = get_subclasses_loaders(trainset_public, n_clients=1, client_classes=args.num_workers * client_classes, num_workers=4, seed=100)
 
+                if args.partition_mode == 'uniform':
+                    testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, non_overlapped=True, seed=100)
+
+                elif args.partition_mode == 'dirichlet':
+                    testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, non_overlapped=False, seed=100)
+                
+                else:
+                    raise NotImplementedError("Not supported partition mode")
+
+            
+                logger.info(f"Cloud Train loader")
+                trainloader_cloud = get_subclasses_loaders(trainset_public, n_clients=1, client_classes=client_classes, num_workers=4, non_overlapped=True, seed=100)
+                exit()
             # Use private data to perform distillation       
             else:
                 # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
-                trainloaders = get_subclasses_loaders(trainset, args.num_workers, client_classes, num_workers=4, seed=100)
-                trainloader_cloud = get_subclasses_loaders(trainset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, seed=100)
+                trainloaders = get_subclasses_loaders(trainset, args.num_workers, client_classes, num_workers=4, non_overlapped=True, seed=100)
+                trainloader_cloud = get_subclasses_loaders(trainset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, non_overlapped=True, seed=100)
 
                 # _, testloader_non_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
-                testloader_cloud = get_subclasses_loaders(testset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, seed=100)
+                testloader_cloud = get_subclasses_loaders(testset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, non_overlapped=True, seed=100)
 
                 # logger.debug(testloader_non_iid[0])
-                testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, seed=100)
+                testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, non_overlapped=True, seed=100)
 
         if args.save_loader:
             torch.save(trainloader, 'trainloader_first_10cls.pth')

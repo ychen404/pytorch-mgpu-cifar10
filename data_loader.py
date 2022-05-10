@@ -112,9 +112,7 @@ def split_train_data(train_data, split=0.5):
 def extract_classes(train_data, split, dataset='cifar100', workerid=0):
 
     # we can change this to go through the data once and return all the classes for all the workers
-    classes = []
-    # total_classes = int(max(train_data.targets) + 1)
-    
+    classes = []   
     
     if dataset == 'cifar100':
         total_classes = 100    
@@ -129,13 +127,39 @@ def extract_classes(train_data, split, dataset='cifar100', workerid=0):
     end = workerid * num_classes + upper
     # pdb.set_trace()
     logger.debug(f"Worker: {workerid}; start: {start}; end: {end}; num_classes: {num_classes}")
-
+    # pdb.set_trace()
     # Pay attention to the bounds
+    # Maybe we can use np.where instead
+    # pdb.set_trace()
     for data in train_data:
         if start <= data[1] < end:
           classes.append(data)
     
     return classes
+
+
+class CustomSubset(Dataset):
+    r"""
+    May be useful to clean up the loaders
+    https://discuss.pytorch.org/t/attributeerror-subset-object-has-no-attribute-targets/66564/5
+    Subset of a dataset at specified indices.
+
+    Arguments:
+        dataset (Dataset): The whole Dataset
+        indices (sequence): Indices in the whole set selected for subset
+        labels(sequence) : targets as required for the indices. will be the same length as indices
+    """
+    def __init__(self, dataset, indices, labels):
+        self.dataset = torch.utils.data.Subset(dataset, indices)
+        self.targets = labels
+
+    def __getitem__(self, idx):
+        image = self.dataset[idx][0]
+        target = self.targets[idx]
+        return (image, target)
+
+    def __len__(self):
+        return len(self.targets)
 
 
 def get_worker_data(trainset, args, workerid)->torch.utils.data.dataloader.DataLoader:
@@ -238,7 +262,7 @@ def split_dirichlet(labels, n_clients, n_data, alpha, double_stochstic=True, see
     return client_idcs
 
 
-def split_uniform(labels, n_clients, client_classes, seed=0):
+def split_uniform(labels, n_clients, client_classes, non_overlapped=True, seed=0):
     '''Splits data among the clients according to a uniformlly, i.e., each client has a few classes
         This numpy based implementation is much faster than my previous one
     '''
@@ -249,23 +273,34 @@ def split_uniform(labels, n_clients, client_classes, seed=0):
       labels = labels.numpy()
 
     n_classes = np.max(labels)+1
+
+    # The indices that belong to all the classes
     class_idcs = [np.argwhere(np.array(labels)==y).flatten() 
            for y in range(n_classes)]
 
-    # print(len(class_idcs))
-    # print(len(class_idcs[0]))
+    # pdb.set_trace()
     client_idcs = [[] for _ in range(n_clients)]
 
-    # Get the idcs for each client data
-    # for example, client 0 has the first two class, so the idxs are 2x0 and 2x0 + 1
-    # 2 is client_classes, 0 and 1 are cc
-    for idx, c in enumerate(class_idcs):
-        for i in range(n_clients):
-            for cc in range(client_classes):
-                if idx == client_classes * i + cc:
-                    client_idcs[i] += [c]
 
-    # pdb.set_trace()
+    if non_overlapped:
+        # Get the idcs for each client data
+        # for example, client 0 has the first two class, so the idxs are 2x0 and 2x0 + 1
+        # 2 is client_classes, 0 and 1 are cc
+        
+        for idx, c in enumerate(class_idcs):
+            for i in range(n_clients):
+                for cc in range(client_classes):
+                    if idx == client_classes * i + cc:
+                        client_idcs[i] += [c]
+
+
+    else: # for the normal dirichlet case
+        for idx, c in enumerate(class_idcs):
+            for i in range(n_clients):
+                for cc in range(client_classes):
+                    if idx == cc:
+                        client_idcs[i] += [c]
+
     client_idcs = [np.concatenate(idcs) for idcs in client_idcs]
 
     print_split(client_idcs, labels)
@@ -307,7 +342,8 @@ def make_double_stochstic(x):
 def get_dirichlet_loaders(train_data, n_clients=3, alpha=0, batch_size=128, n_data=None, num_workers=4, seed=0):
 
     # Check if it is train_data object
-    if not isinstance(train_data, torchvision.datasets.cifar.CIFAR100):
+    if not isinstance(train_data, torchvision.datasets.cifar.CIFAR100) or \
+            not isinstance(train_data, torchvision.datasets.cifar.CIFAR10):
         train_data_targets = extract_targets(train_data)
 
     else:
@@ -355,8 +391,7 @@ def get_random_loaders(train_data, n_clients=3, percent=100, batch_size=128, num
     return client_loaders
 
 
-
-def get_subclasses_loaders(train_data, n_clients=3, client_classes=2, batch_size=128, num_workers=4, seed=0):
+def get_subclasses_loaders(train_data, n_clients=3, client_classes=2, batch_size=128, num_workers=4, non_overlapped=True, seed=0):
 
     # Check if it is train_data object
     if not isinstance(train_data, torchvision.datasets.cifar.CIFAR100):
@@ -366,7 +401,7 @@ def get_subclasses_loaders(train_data, n_clients=3, client_classes=2, batch_size
         train_data_targets = train_data.targets
 
     
-    subset_idcs = split_uniform(train_data_targets, n_clients, client_classes, seed=seed)
+    subset_idcs = split_uniform(train_data_targets, n_clients, client_classes, non_overlapped, seed=seed)
     client_data = [torch.utils.data.Subset(train_data, subset_idcs[i]) for i in range(n_clients)]
 
     client_loaders = [torch.utils.data.DataLoader(subset, 
