@@ -19,7 +19,6 @@ import logging
 from models import *
 from utils import *
 from data_loader import *
-import itertools
 import pdb
 from plot_results import *
 import random
@@ -60,6 +59,7 @@ def parse_arguments():
     parser.add_argument('--lamb', default=0.5, type=float, help='lambda for distillation')
     parser.add_argument('--public_percent', default=0.5, type=float, help='percentage training data to be public')
     parser.add_argument('--distill_percent', default=1, type=float, help='percentage of public data use for distillation')
+    parser.add_argument('--vary_epoch', action='store_true', help="change the number of local epochs of edges")
 
     ######################### Aggregation parameters #########################
     parser.add_argument('--selection', action='store_true', help="enable selection method")
@@ -198,6 +198,7 @@ def run_train(net, round, args, trainloader, testloader, testloader_local, worke
             write_csv(path, csv_name_local, str(acc_local))
 
         list_loss.append(trainloss)
+
     # pdb.set_trace()
     # save_figure(path, csv_name)
     
@@ -225,11 +226,30 @@ def distill(
     
     logger.debug('\nEpoch: %d' % epoch)
 
+    def return_edge_norm(edge_out, emb):
+
+        nLab = total_classes
+        batchProbs = F.softmax(edge_out, dim=1).data.cpu().numpy()
+        maxInds = np.argmax(batchProbs,1)
+        size = 1
+        
+        embedding = np.zeros([size, embDim * nLab])
+        idxs = np.arange(size)
+        for j in range(size):
+            for c in range(nLab):
+                if c == maxInds[j]:
+                    embedding[idxs[j]][embDim * c : embDim * (c+1)] = deepcopy(emb[j]) * (1 - batchProbs[j][c])
+                else:
+                    embedding[idxs[j]][embDim * c : embDim * (c+1)] = deepcopy(emb[j]) * (-1 * batchProbs[j][c])
+
+        emb_norm = np.linalg.norm(embedding, 2)
+
+        return emb_norm
+
+
     cloud_net.train()
     # logger.debug(f"model.train={cloud_net.training}")
     train_loss = 0
-    correct = 0
-    total = 0
     loss_fun = nn.CrossEntropyLoss()
     kd_fun = nn.KLDivLoss(reduction='sum')
     T = 1
@@ -250,8 +270,6 @@ def distill(
         end = worker_id * num_classes + num_classes - 1
         bounds.append([start, end])
 
-    print(bounds)
-
     counter = 0
     logger.debug(f"Lambda: {lambda_}")
     for batch_idx, (inputs, targets) in enumerate(trainloader_concat):
@@ -265,8 +283,9 @@ def distill(
         batch_size = out_s.shape[0]
         s_max = F.log_softmax(out_s / T, dim=1)
 
+        out_t_temp = []
+
         if selection: # direct the data to edge worker based on classes 
-            out_t_temp = []
             logger.debug(f"Selection")
             logger.debug(f"inputs: {inputs.shape}, targets: {targets.shape}")
             # pdb.set_trace()
@@ -302,94 +321,93 @@ def distill(
             
             # create place holder for emb method
             batch_memory = [-1] * batch_size
-            edge_idx = 0
             norm_idx = 1
             output_idx = 2
-            target_idx = 3
-            nLab = total_classes
-            
+            save_all_output = [[] for _ in range(batch_size)]
+
             emb_flag = False
-            
-            for i, edge_net in enumerate(edge_nets):
-                edge_net = edge_net.to(device)
+            # pdb.set_trace()
+            # TODO: Need to add a method to distinguish with other
+            if drop_leastconfident:
+                emb_flag = True
+                for idx, (input, target) in enumerate(zip(inputs, targets)):
+                    input = input.unsqueeze(0)
+
+                    for i, edge_net in enumerate(edge_nets):
+                        logger.debug(f"Processing the {i} edge")
+
+                        if hasattr(edge_net, 'emb') and edge_net.emb:
+
+                            edge_out, emb = edge_net(input)
+                            embDim = edge_net.get_embedding_dim()
+                            emb = emb.data.cpu().numpy()
+                            emb_norm = return_edge_norm(edge_out, emb)
+                            
+                            save_all_output[idx].append((emb_norm, edge_out))
+
+                    filtered_output = save_all_output[idx] # save the outputs from a batch 
+                    filtered_output.sort(key = lambda x : x[0]) # use the emb_norm to sort
+
+                    temp_res = []
+                    for e in filtered_output[:-num_drop]:
+                        temp_res.append(e[1]) # the 1st idx in e is the model output
+                        out_t = torch.cat(temp_res, dim=0) # use dim 0 to stack the tensors
+                        logger.debug(f"The out_t shape is {out_t.shape}")
+
+            #### Calculate model outputs from all edge models
+            else:
+                for i, edge_net in enumerate(edge_nets):
+                    edge_net = edge_net.to(device)
+                    out_t += edge_net(inputs)
 
                 # logger.debug(f"The edge_net.emb flag is {edge_net.emb}")
                 
-                if hasattr(edge_net, 'emb') and edge_net.emb:
-                    emb_flag = True
-                    negative_one, replaced = 0, 0
-                    for idx, (input, target) in enumerate(zip(inputs, targets)):
-                        input = input.unsqueeze(0)
-                        edge_out, emb = edge_net(input)
-                        # print(f"edge_out shape: {edge_out.shape}")
-                        embDim = edge_net.get_embedding_dim()
-                                        
-                        emb = emb.data.cpu().numpy()
-                        batchProbs = F.softmax(edge_out, dim=1).data.cpu().numpy()
-                        # print(batchProbs)
-                        maxInds = np.argmax(batchProbs,1)
-                        # print(maxInds)
-
-                        size = 1
-                        embedding = np.zeros([size, embDim * nLab])
-                        # y = inputs
-                        idxs = np.arange(size)
-                        # pdb.set_trace()
-                        for j in range(size):
-                            for c in range(nLab):
-                                if c == maxInds[j]:
-                                    embedding[idxs[j]][embDim * c : embDim * (c+1)] = deepcopy(emb[j]) * (1 - batchProbs[j][c])
-                                else:
-                                    embedding[idxs[j]][embDim * c : embDim * (c+1)] = deepcopy(emb[j]) * (-1 * batchProbs[j][c])
-
-                        emb_norm = np.linalg.norm(embedding, 2)
+                # if hasattr(edge_net, 'emb') and edge_net.emb:
+                #     emb_flag = True
+                #     negative_one, replaced = 0, 0
+                #     for idx, (input, target) in enumerate(zip(inputs, targets)):
+                #         input = input.unsqueeze(0)
+                #         edge_out, emb = edge_net(input)
+                #         embDim = edge_net.get_embedding_dim()
+                #         emb = emb.data.cpu().numpy()
+                #         emb_norm = return_edge_norm(edge_out, emb)
                         
-                        if drop_leastconfident:
+                #         pdb.set_trace()
+                #         if drop_leastconfident: 
 
-                            # Used for drop least confidence
-                            # Create memory for each sample in each batch of each edge worker
-                            # Use the norm of the second to the last layer output as an indicator
-                            # 'num_drop' determines how many edge workers are dropping
-                            raise NotImplementedError("Not support yet")                                    
+                #             # Used for drop least confidence
+                #             # Create memory for each sample in each batch of each edge worker
+                #             # Use the norm of the second to the last layer output as an indicator
+                #             # 'num_drop' determines how many edge workers are dropping
+                #             # We don't need to store 'i' in this case
+                #             # But it's better to use consistent indexing
+                #             save_all_output[idx].append((i, emb_norm, edge_out))
 
-                        
-                        else:
-                            
-                            if batch_memory[idx] == -1:
-                                batch_memory[idx] = (i, emb_norm, edge_out, target)
-                                # negative_one += 1
-                                # print(f"new")
-                            else: 
-                                if  emb_norm < batch_memory[idx][norm_idx]:
-                                    batch_memory[idx] = (i, emb_norm, edge_out, target)
-                                    # print("replace")
-                                    replaced += 1
+                #         else:
+                #             if batch_memory[idx] == -1:
+                #                 batch_memory[idx] = (i, emb_norm, edge_out, target)
+                                
+                #             else: 
+                #                 if  emb_norm < batch_memory[idx][norm_idx]:
+                #                     batch_memory[idx] = (i, emb_norm, edge_out, target)
+                #                     replaced += 1
 
-                else:                    
-                    out_t += edge_net(inputs)
 
-            if emb_flag:
-                logger.debug(f"emb mode")
-                stack_out = []
-                emb_acc = 0
-                emb_correct = 0
+            # if emb_flag:
+            #     logger.debug(f"emb mode")
+            #     stack_out = []
+            #     dropped = []
+            #     if drop_leastconfident:
+            #         pass
+            #     else:    
+            #         for b in batch_memory:
+            #             stack_out.append(b[output_idx])
+
+            #         not_replaced = len(batch_memory) - replaced
+            #         logger.debug(f"Not replaced: {not_replaced}, replaced: {replaced}, not_replaced/total: {not_replaced/len(batch_memory)}")
+
+            #     out_t = torch.cat(stack_out, dim=0) # use dim 0 to stack the tensors
                 
-                for b in batch_memory:
-                    # logger.debug(f"i: {b[edge_idx]} target: {b[target_idx]}")
-                    stack_out.append(b[output_idx])
-                    # if b[target_idx] == 0 and b[edge_idx] == 0 \
-                    #     or b[target_idx] == 1 and b[edge_idx] == 0 \
-                    #         or b[target_idx] == 2 and b[edge_idx] == 1 \
-                    #             or b[target_idx] == 3 and b[edge_idx] == 1:
-                    #     emb_correct += 1
-
-                # logger.debug(f"Num emb correct: {emb_correct}, size: {len(batch_memory)}, Emb acc: {100 * emb_correct/len(batch_memory)}")
-                not_replaced = len(batch_memory) - replaced
-                logger.debug(f"Not replaced: {not_replaced}, replaced: {replaced}, not_replaced/total: {not_replaced/len(batch_memory)}")
-
-                out_t = torch.cat(stack_out, dim=0) # use dim 0 to stack the tensors
-                # print(f"out_t.shape {out_t.shape}")
-            
             t_max += F.softmax(out_t / T, dim=1)
             
             if average_method == 'equal':
@@ -402,7 +420,7 @@ def distill(
                 # We may need to add some additional operations 
                 logger.debug("Grad mode")
 
-            else: # weighted, performance is not good, not used
+            else: 
                 raise NotImplementedError("Not support weighted average now")
 
         loss_kd = kd_fun(s_max, t_max) / batch_size
@@ -521,12 +539,12 @@ if __name__ == "__main__":
             # do notthing for now (moved insided the distillation function)
             logger.info(f"The distill percent is {args.distill_percent}")
 
-    if args.split != 1 and not args.split_classes:
+    if args.split != 0 and not args.split_classes:
         logger.info(f"Using {int(args.split * 100)}% of training data, classifying all classes")
         trainset_a, trainset_b = split_train_data(trainset, args.split)
         trainloader = torch.utils.data.DataLoader(trainset_a, batch_size=args.batch_size, shuffle=True, num_workers=4)
     
-    elif args.split != 1 and args.split_classes and not args.baseline:
+    elif args.split != 0 and args.split_classes and not args.baseline:
         # Use all data
         # logger.info(f"is it here Using {int(args.split * 100)}% of training data and classifying {int(args.split * 100)}%")
         logger.info(f"is it here Using {int(args.split * 100)}% of training data and classifying {int(args.split * 100)}%")
@@ -595,7 +613,7 @@ if __name__ == "__main__":
     # TODO: simplify the test cases. The test cases are overlapped. 
     
     #################################### For baseline test ####################################
-    elif args.split != 1 and args.baseline:
+    elif args.split != 0 and args.baseline:
         logger.info(f"Using {int(args.split * 100)}% for simple baseline")
         trainloader, testloader = get_worker_data(trainset, args, workerid=0)
 
@@ -627,13 +645,16 @@ if __name__ == "__main__":
         nets = check_model_trainable(nets)
         for i in range(args.num_workers):
             if not args.resume:
-                if i == 0: # test training only the first edge
-                    logger.debug(f"{args.num_workers}, {i}")
-                    run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
-                    logger.debug("Done edge training")
+                if args.vary_epoch:
+                    if i == 0: # test training only the first edge
+                        logger.debug(f"{args.num_workers}, {i}")
+                        run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
+                        logger.debug("Done edge training")
+                    else:
+                        run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, True, 'local', 'edge_' + str(i))
                 else:
-                    run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, True, 'local', 'edge_' + str(i))
-                                
+                    run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
+                                    
         # Get the public data with the specified classes
         run_distill(nets, 
                     cloud_net, 

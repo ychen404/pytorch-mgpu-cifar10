@@ -117,7 +117,7 @@
 
 split=1
 CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
-                --workspace test_emb_diri_confidence \
+                --workspace emb_diri_dlc_e_50_c_50 \
                 --net res18_emb \
                 --cloud res18 \
                 --split $split \
@@ -125,15 +125,16 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
                 --partition_mode dirichlet \
                 --alpha 1 \
                 --dataset cifar10 \
-                --num_workers 2 \
+                --num_workers 3 \
                 --num_rounds 1 \
-                --epoch 30 \
-                --cloud_epoch 1 \
+                --epoch 50 \
+                --cloud_epoch 30 \
                 --optimizer adam \
                 --cloud_lr 0.001 \
                 --lr 0.1 \
                 --lamb 1 \
                 --public_distill \
+                --dlc \
                 --public_percent 0.5
 
 ###### Test drop least confidence on cifar100 (sample 10 classes only) to compare with fedavg 
