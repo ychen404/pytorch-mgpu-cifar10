@@ -137,20 +137,45 @@
 #                 --dlc \
 #                 --public_percent 0.5
 
-split=1
-CUDA_VISIBLE_DEVICES=0 python3 train_cifar.py \
-                --workspace emb_diri_dlc_e_50_c_50_4cls \
+############### distillation ###############
+# split=0.4
+# CUDA_VISIBLE_DEVICES=0 python3 train_cifar.py \
+#                 --workspace emb_diri_dlc_r_1_e_50_c_100_4cls \
+#                 --net res6_emb \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 1 \
+#                 --dataset cifar10 \
+#                 --num_workers 3 \
+#                 --num_rounds 1 \
+#                 --epoch 50 \
+#                 --cloud_epoch 100 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --dlc \
+#                 --aggregation_mode distillation \
+#                 --public_percent 0.5
+
+split=0.4
+CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+                --workspace emb_diri_dlc_r_1_e_50_c_100_4cls_alpha_100 \
                 --net res6_emb \
                 --cloud res18 \
                 --split $split \
                 --split_classes \
                 --partition_mode dirichlet \
-                --alpha 1 \
+                --alpha 100 \
                 --dataset cifar10 \
                 --num_workers 3 \
-                --num_rounds 50 \
+                --num_rounds 1 \
                 --epoch 50 \
-                --cloud_epoch 50 \
+                --cloud_epoch 100 \
                 --optimizer adam \
                 --cloud_lr 0.001 \
                 --lr 0.1 \
@@ -158,8 +183,60 @@ CUDA_VISIBLE_DEVICES=0 python3 train_cifar.py \
                 --temp 1 \
                 --public_distill \
                 --dlc \
+                --aggregation_mode distillation \
                 --public_percent 0.5
 
+
+############### fedavg ###############
+
+# split=0.4
+# CUDA_VISIBLE_DEVICES=0 python3 train_cifar.py \
+#                 --workspace emb_diri_dlc_4cls_fedavg \
+#                 --net res6_emb \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 1 \
+#                 --dataset cifar10 \
+#                 --num_workers 3 \
+#                 --num_rounds 100 \
+#                 --epoch 5 \
+#                 --cloud_epoch 10 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --dlc \
+#                 --aggregation_mode fedavg \
+#                 --public_percent 0.5
+
+
+# split=0.4
+# CUDA_VISIBLE_DEVICES=0 python3 train_cifar.py \
+#                 --workspace emb_diri_dlc_4cls_fedavg_alpha_1 \
+#                 --net res6_emb \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 1 \
+#                 --dataset cifar10 \
+#                 --num_workers 3 \
+#                 --num_rounds 100 \
+#                 --epoch 5 \
+#                 --cloud_epoch 10 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --dlc \
+#                 --aggregation_mode fedavg \
+#                 --public_percent 0.5
 
 ###### Test drop least confidence on cifar100 (sample 10 classes only) to compare with fedavg 
 ##### Not completed yet

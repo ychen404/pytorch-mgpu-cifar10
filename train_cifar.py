@@ -2,6 +2,7 @@
 '''Train CIFAR10 with PyTorch.'''
 
 from __future__ import print_function
+from sqlite3 import NotSupportedError
 from xml.dom import NotSupportedErr
 
 import torch
@@ -15,6 +16,7 @@ import torchvision.transforms as transforms
 import os
 import argparse
 import logging
+import copy
 
 from models import *
 from utils import *
@@ -23,10 +25,11 @@ import pdb
 from plot_results import *
 import random
 from copy import deepcopy
+from Fed import FedAvg
 
 
 logger = logging.getLogger('__name__')
-logger.setLevel('DEBUG')
+logger.setLevel('INFO')
 # fmt_str = '%(levelname)s - %(message)s'
 # fmt_file = '[%(levelname)s]: %(message)s'
 
@@ -52,6 +55,8 @@ def parse_arguments():
     parser.add_argument('--temperature', default=1, type=float, help='temperature for distillation')
     parser.add_argument('--optimizer', default='sgd')
     parser.add_argument('--partition_mode', default='dirichlet')
+    parser.add_argument('--aggregation_mode', default='distillation')
+
     parser.add_argument('--public_distill', action='store_true', help="use public data to distill")
     parser.add_argument('--exist_loader', action='store_true', help="there is exist loader")
     parser.add_argument('--save_loader', action='store_true', help="save trainloaders")
@@ -276,10 +281,12 @@ def distill(
     # logger.debug(f"Lambda: {lambda_}")
     for batch_idx, (inputs, targets) in enumerate(trainloader_concat):
         inputs, targets = inputs.to(device), targets.to(device)
-        # logger.debug(f"device = {device}")
+        
+        if batch_idx % 10 == 0:
+            logger.debug(f"Processing batch {batch_idx}")
+        
         optimizer.zero_grad()
         counter += 1
-        # logger.debug(f"Counter: {counter}")
         out_s = cloud_net(inputs)
 
         size_curr_batch = out_s.shape[0]
@@ -596,7 +603,6 @@ if __name__ == "__main__":
 
                 logger.info(f"Edge Test data")
                 
-
                 if args.partition_mode == 'uniform':
                     testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, non_overlapped=True, seed=100)
 
@@ -606,10 +612,9 @@ if __name__ == "__main__":
                 else:
                     raise NotImplementedError("Not supported partition mode")
 
-            
                 logger.info(f"Cloud Train loader")
                 trainloader_cloud = get_subclasses_loaders(trainset_public, n_clients=1, client_classes=client_classes, num_workers=4, non_overlapped=True, seed=100)
-                exit()
+
             # Use private data to perform distillation       
             else:
                 # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
@@ -646,11 +651,22 @@ if __name__ == "__main__":
 
     nets = []
 
-    for i in range(args.num_workers):
-        net = build_model_from_name(args.net, num_classes, device)
-        nets.append(net)
 
-    cloud_net = build_model_from_name(args.cloud, num_classes, device)
+    ################### Define models based on aggregation mode ###################
+
+    for i in range(args.num_workers):
+            net = build_model_from_name(args.net, num_classes, device)
+            nets.append(net)
+
+    if args.aggregation_mode == 'distillation':
+        cloud_net = build_model_from_name(args.cloud, num_classes, device)
+
+    elif args.aggregation_mode == 'fedavg':
+        cloud_net = build_model_from_name(args.net, num_classes, device)
+        
+    
+    else:
+        raise NotSupportedError("Aggregation mode not supported. Use 'distillation' or 'fedavg")
 
     if args.resume:
         # load edge checkpoints
@@ -671,15 +687,53 @@ if __name__ == "__main__":
                     else:
                         run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, True, 'local', 'edge_' + str(i))
                 else:
+                    if args.aggregation_mode == 'fedavg':
+                        
+                        logger.info("Copying cloud weights")
+                        cloud_w = cloud_net.state_dict()
+                        # edge model loads the cloud weights
+                        logger.info("Edge loading cloud weights")
+                        for i, model in enumerate(nets):
+                            model.load_state_dict(cloud_w)
+                    
                     run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
-                                    
-        # Get the public data with the specified classes
-        run_distill(nets, 
-                    cloud_net, 
-                    args, 
-                    trainloader_cloud, 
-                    testloader_cloud, 
-                    worker_num=0, 
-                    device=device,
-                    selection=args.selection, 
-                    prefix='distill_')
+
+
+        if args.aggregation_mode == 'distillation':                            
+            # Get the public data with the specified classes
+            run_distill(nets, 
+                        cloud_net, 
+                        args, 
+                        trainloader_cloud, 
+                        testloader_cloud, 
+                        worker_num=0, 
+                        device=device,
+                        selection=args.selection, 
+                        prefix='distill_')
+
+        
+        elif args.aggregation_mode == 'fedavg':
+            
+            all_weights = []
+
+            for i, model in enumerate(nets):
+
+                w = model.state_dict()
+                # edge_models.append(model)              
+                all_weights.append(copy.deepcopy(w))
+        
+            logger.debug(f"Length of all_weights: {len(all_weights)}")
+
+            averaged_weights = FedAvg(all_weights)
+            cloud_net.load_state_dict(averaged_weights)
+            
+            ########### Calculate accuracy ###########            
+            criterion_edge = nn.CrossEntropyLoss()
+            acc, best_acc = test(round, args, cloud_net, criterion_edge, testloader_cloud, device, 'fedavg')
+            logger.info(f"The fedavg accuracy is: {acc}")
+            csv_name = 'acc_fedavg'  + '.csv'
+            path = 'results/' + args.workspace
+            write_csv(path, csv_name, str(acc))
+
+
+            
