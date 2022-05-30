@@ -69,7 +69,7 @@ def parse_arguments():
 
     ######################### Aggregation parameters #########################
     parser.add_argument('--selection', action='store_true', help="enable selection method")
-    parser.add_argument('--dlc', action='store_true', help="enable selection method")
+    parser.add_argument('--emb_mode', default='dlc', help="[dlc, wavg]")
     parser.add_argument('--num_drop', default=1, type=int, help='number of edges to be dropped')
     parser.add_argument('--finetune', action='store_true', help="finetune the cloud model") # test fine-tune
     parser.add_argument('--finetune_epoch', default=10, type=int, help='number of epochs for finetune')
@@ -224,7 +224,7 @@ def distill(
     dataset,
     average_method,
     select_mode,
-    drop_leastconfident,
+    emb_mode,
     num_drop,
     selection=False,
     lambda_=1,
@@ -337,9 +337,10 @@ def distill(
 
             save_all_output = [[] for _ in range(len(inputs))]
 
-            wavg = True # test weighted average
-
-            if wavg: # if not dropping any edge, the holder should be able to hold all the edge res
+            # emb_mode determines how do we use emb
+            # 'wavg' uses the norm of the emb to perform weighted average on softmax
+            # 'dlc' uses the norm of the emb to drop edge workers 
+            if emb_mode == 'wavg': # if not dropping any edge, the holder should be able to hold all the edge res
                 temp_res = torch.empty((len(edge_nets), total_classes), device=device)    
             
             else:
@@ -350,7 +351,7 @@ def distill(
             emb_flag = False
             
             # TODO: Need to add a method to distinguish with other
-            if drop_leastconfident or wavg:
+            if emb_mode == 'dlc' or emb_mode == 'wavg':
                 emb_flag = True
                 for idx, (input, target) in enumerate(zip(inputs, targets)):
                     input = input.unsqueeze(0)
@@ -368,15 +369,17 @@ def distill(
                     # pdb.set_trace()
                     sorted_output = save_all_output[idx] # save the outputs from a batch 
                     
-                    if wavg: # weighted average of all edge
+                    if emb_mode == 'wavg': # weighted average of all edge
                         sum_norm = sum(e[0] for e in sorted_output)
                         for i, e in enumerate(sorted_output):
                             temp_res[i] = (e[0] / sum_norm) * e[1]
 
-                    else: # dropping some edge workers
+                    elif emb_mode == 'dlc': # dropping some edge workers
                         sorted_output.sort(key = lambda x : x[0]) # use the emb_norm to sort
                         for i, e in enumerate(sorted_output[:-num_drop]):
                             temp_res[i] = e[1] # the 1st idx in e is the model output
+                    else:
+                        raise NotImplementedError("Not supported emb mode")
                         
                     # Calculate the average of the output of each sample
                     # Each output is torch.size([1,10])
@@ -476,7 +479,7 @@ def run_distill(
                             dataset=args.dataset,
                             average_method='grad', 
                             select_mode='guided',
-                            drop_leastconfident=args.dlc,
+                            emb_mode=args.emb_mode,
                             num_drop=args.num_drop,
                             selection=selection, 
                             lambda_=args.lamb,
