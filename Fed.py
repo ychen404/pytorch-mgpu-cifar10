@@ -19,5 +19,5 @@ if __name__ == "__main__":
     n_cycles = 5
     lrate_max = 0.001
     
-    series = [cosine_annealing(i, n_epochs, n_cycles, lrate_max) for i in range(n_epochs)]
-    print(series)
+    # series = [cosine_annealing(i, n_epochs, n_cycles, lrate_max) for i in range(n_epochs)]
+    # print(series)

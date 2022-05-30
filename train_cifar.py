@@ -216,7 +216,7 @@ def distill(
     edge_nets, 
     cloud_net, 
     optimizer, 
-    trainloader_concat, 
+    distill_loader, 
     device,
     num_workers,
     split,
@@ -250,7 +250,6 @@ def distill(
                     embedding[idxs[j]][embDim * c : embDim * (c+1)] = deepcopy(emb[j]) * (-1 * batchProbs[j][c])
 
         emb_norm = np.linalg.norm(embedding, 2)
-
         return emb_norm
     
 
@@ -279,7 +278,10 @@ def distill(
 
     counter = 0
     # logger.debug(f"Lambda: {lambda_}")
-    for batch_idx, (inputs, targets) in enumerate(trainloader_concat):
+    for batch_idx, (inputs, targets) in enumerate(distill_loader):
+        total = 0
+        correct = 0
+
         inputs, targets = inputs.to(device), targets.to(device)
         
         if batch_idx % 10 == 0:
@@ -335,19 +337,23 @@ def distill(
 
             save_all_output = [[] for _ in range(len(inputs))]
 
+            wavg = True # test weighted average
+
+            if wavg: # if not dropping any edge, the holder should be able to hold all the edge res
+                temp_res = torch.empty((len(edge_nets), total_classes), device=device)    
             
-            # The output size of each sample is torch.Size([1, 10]) for cifar10
-            num_left_edge = len(edge_nets) - num_drop
-            temp_res = torch.empty((num_left_edge, total_classes), device=device)
+            else:
+                # The output size of each sample is torch.Size([1, 10]) for cifar10
+                num_left_edge = len(edge_nets) - num_drop
+                temp_res = torch.empty((num_left_edge, total_classes), device=device)
 
             emb_flag = False
-            # pdb.set_trace()
+            
             # TODO: Need to add a method to distinguish with other
-            if drop_leastconfident:
+            if drop_leastconfident or wavg:
                 emb_flag = True
                 for idx, (input, target) in enumerate(zip(inputs, targets)):
                     input = input.unsqueeze(0)
-
                     for i, edge_net in enumerate(edge_nets):
                         # logger.debug(f"Processing the {i} edge")
 
@@ -356,16 +362,22 @@ def distill(
                             edge_out, emb = edge_net(input)
                             embDim = edge_net.get_embedding_dim()
                             emb = emb.data.cpu().numpy()
-                            emb_norm = return_edge_norm(edge_out, emb)
-                            
+                            emb_norm = return_edge_norm(edge_out, emb)                            
                             save_all_output[idx].append((emb_norm, edge_out))
 
+                    # pdb.set_trace()
                     sorted_output = save_all_output[idx] # save the outputs from a batch 
-                    sorted_output.sort(key = lambda x : x[0]) # use the emb_norm to sort
                     
-                    for i, e in enumerate(sorted_output[:-num_drop]):
-                        temp_res[i] = e[1] # the 1st idx in e is the model output
-                    
+                    if wavg: # weighted average of all edge
+                        sum_norm = sum(e[0] for e in sorted_output)
+                        for i, e in enumerate(sorted_output):
+                            temp_res[i] = (e[0] / sum_norm) * e[1]
+
+                    else: # dropping some edge workers
+                        sorted_output.sort(key = lambda x : x[0]) # use the emb_norm to sort
+                        for i, e in enumerate(sorted_output[:-num_drop]):
+                            temp_res[i] = e[1] # the 1st idx in e is the model output
+                        
                     # Calculate the average of the output of each sample
                     # Each output is torch.size([1,10])
                     # Use dim=0, the size of the mean is torch.size([10]), use keepdim to maintain the torch.size([1, 10])
@@ -373,61 +385,12 @@ def distill(
                     out_t_temp.append(temp_res.mean(dim=0, keepdim=True))
                 
                 out_t = torch.cat(out_t_temp, dim=0) # use dim 0 to stack the tensors
-                # logger.debug(f"out_t shape: {out_t.shape}")
-
+                
             #### Calculate model outputs from all edge models without dropping
             else:
                 for i, edge_net in enumerate(edge_nets):
                     edge_net = edge_net.to(device)
                     out_t += edge_net(inputs)
-
-                # logger.debug(f"The edge_net.emb flag is {edge_net.emb}")
-                
-                # if hasattr(edge_net, 'emb') and edge_net.emb:
-                #     emb_flag = True
-                #     negative_one, replaced = 0, 0
-                #     for idx, (input, target) in enumerate(zip(inputs, targets)):
-                #         input = input.unsqueeze(0)
-                #         edge_out, emb = edge_net(input)
-                #         embDim = edge_net.get_embedding_dim()
-                #         emb = emb.data.cpu().numpy()
-                #         emb_norm = return_edge_norm(edge_out, emb)
-                        
-                #         pdb.set_trace()
-                #         if drop_leastconfident: 
-
-                #             # Used for drop least confidence
-                #             # Create memory for each sample in each batch of each edge worker
-                #             # Use the norm of the second to the last layer output as an indicator
-                #             # 'num_drop' determines how many edge workers are dropping
-                #             # We don't need to store 'i' in this case
-                #             # But it's better to use consistent indexing
-                #             save_all_output[idx].append((i, emb_norm, edge_out))
-
-                #         else:
-                #             if batch_memory[idx] == -1:
-                #                 batch_memory[idx] = (i, emb_norm, edge_out, target)
-                                
-                #             else: 
-                #                 if  emb_norm < batch_memory[idx][norm_idx]:
-                #                     batch_memory[idx] = (i, emb_norm, edge_out, target)
-                #                     replaced += 1
-
-
-            # if emb_flag:
-            #     logger.debug(f"emb mode")
-            #     stack_out = []
-            #     dropped = []
-            #     if drop_leastconfident:
-            #         pass
-            #     else:    
-            #         for b in batch_memory:
-            #             stack_out.append(b[output_idx])
-
-            #         not_replaced = len(batch_memory) - replaced
-            #         logger.debug(f"Not replaced: {not_replaced}, replaced: {replaced}, not_replaced/total: {not_replaced/len(batch_memory)}")
-
-            #     out_t = torch.cat(stack_out, dim=0) # use dim 0 to stack the tensors
 
             t_max += F.softmax(out_t / T, dim=1)
             
@@ -439,7 +402,6 @@ def distill(
                 # Use gradient magnitude to select workers
                 # So nothing needs to be done here for now.
                 # We may need to add some additional operations 
-                # logger.debug("Grad mode")
                 pass
 
             else: 
@@ -454,6 +416,19 @@ def distill(
         optimizer.step()
 
         train_loss += loss_kd.item()
+        
+        # We do not use the true labels to distill
+        # But we can still use them to check the training accuracy for debug purpose
+        # The bar is not accumulating the images
+        # _, predicted = out_s.max(1)
+        # total += targets.size(0)
+        # correct += torch.sum(predicted == targets).float()
+
+        # progress_bar(batch_idx, len(distill_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+        #     % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+
+        # for only the progress_bar
+        progress_bar(batch_idx, len(distill_loader))
         
     return train_loss/(batch_idx+1)
 
