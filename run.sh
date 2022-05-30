@@ -158,7 +158,7 @@
 #                 --lamb 1 \
 #                 --temp 1 \
 #                 --public_distill \
-#                 --dlc \
+#                 --emb_mode dlc \
 #                 --aggregation_mode distillation \
 #                 --public_percent 0.5
 
@@ -182,7 +182,7 @@
 #                 --lamb 1 \
 #                 --temp 1 \
 #                 --public_distill \
-#                 --dlc \
+#                 --emb_mode dlc \
 #                 --aggregation_mode distillation \
 #                 --public_percent 0.5
 
@@ -206,7 +206,7 @@
 #                 --lamb 1 \
 #                 --temp 1 \
 #                 --public_distill \
-#                 --dlc \
+#                 --emb_mode dlc \
 #                 --aggregation_mode distillation \
 #                 --public_percent 0.5
 
@@ -231,7 +231,7 @@
 #                 --lamb 1 \
 #                 --temp 1 \
 #                 --public_distill \
-#                 --dlc \
+#                 --emb_mode dlc \
 #                 --aggregation_mode distillation \
 #                 --public_percent 0.2
 
@@ -255,7 +255,7 @@
 #                 --lamb 1 \
 #                 --temp 1 \
 #                 --public_distill \
-#                 --dlc \
+#                 --emb_mode dlc \
 #                 --aggregation_mode distillation \
 #                 --public_percent 0.5
 
@@ -279,37 +279,60 @@
 #                 --lamb 1 \
 #                 --temp 1 \
 #                 --public_distill \
-#                 --dlc \
+#                 --emb_mode dlc \
 #                 --aggregation_mode distillation \
 #                 --public_percent 0.5
 
 ################ Weighted average based on confidence ################
 
-#                --workspace emb_diri_dlc_wavg_r_1_e_50_c_100_10cls_alpha_100_5workers \
+# split=1
+# CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+#                 --workspace emb_diri_wavg_r_1_e_50_c_100_10cls_alpha_100_5workers \
+#                 --net res6_emb \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 100 \
+#                 --dataset cifar10 \
+#                 --num_workers 5 \
+#                 --num_rounds 1 \
+#                 --epoch 50 \
+#                 --cloud_epoch 100 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --emb_mode wavg \
+#                 --aggregation_mode distillation \
+#                 --public_percent 0.5
 
 split=1
-CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
-                --workspace emb_wavg \
+CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
+                --workspace emb_diri_wavg_r_1_e_50_c_100_10cls_alpha_0.01_5workers \
                 --net res6_emb \
                 --cloud res18 \
                 --split $split \
                 --split_classes \
                 --partition_mode dirichlet \
-                --alpha 100 \
+                --alpha 0.01 \
                 --dataset cifar10 \
-                --num_workers 3 \
+                --num_workers 5 \
                 --num_rounds 1 \
-                --epoch 1 \
-                --cloud_epoch 1 \
+                --epoch 50 \
+                --cloud_epoch 100 \
                 --optimizer adam \
                 --cloud_lr 0.001 \
                 --lr 0.1 \
                 --lamb 1 \
                 --temp 1 \
                 --public_distill \
-                --dlc \
+                --emb_mode wavg \
                 --aggregation_mode distillation \
                 --public_percent 0.5
+
 
 ############### fedavg ###############
 
@@ -333,7 +356,7 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
 #                 --lamb 1 \
 #                 --temp 1 \
 #                 --public_distill \
-#                 --dlc \
+#                 --emb_mode dlc \
 #                 --aggregation_mode fedavg \
 #                 --public_percent 0.5
 
@@ -357,7 +380,7 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
 #                 --lamb 1 \
 #                 --temp 1 \
 #                 --public_distill \
-#                 --dlc \
+#                 --emb_mode dlc \
 #                 --aggregation_mode fedavg \
 #                 --public_percent 0.5
 
@@ -381,7 +404,7 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
 #                 --lamb 1 \
 #                 --temp 1 \
 #                 --public_distill \
-#                 --dlc \
+#                 --emb_mode dlc \
 #                 --aggregation_mode fedavg \
 #                 --public_percent 0.5
 
@@ -405,6 +428,6 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
 #                 --lamb 1 \
 #                 --temp 1 \
 #                 --public_distill \
-#                 --dlc \
+#                 --emb_mode dlc \
 #                 --aggregation_mode fedavg \
 #                 --public_percent 0.5
