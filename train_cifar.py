@@ -66,6 +66,8 @@ def parse_arguments():
     parser.add_argument('--public_percent', default=0.5, type=float, help='percentage training data to be public')
     parser.add_argument('--distill_percent', default=1, type=float, help='percentage of public data use for distillation')
     parser.add_argument('--vary_epoch', action='store_true', help="change the number of local epochs of edges")
+    parser.add_argument('--save_confidence', action='store_true', help="save all the norm values for debug purpose")
+
 
     ######################### Aggregation parameters #########################
     parser.add_argument('--selection', action='store_true', help="enable selection method")
@@ -98,7 +100,7 @@ def train(epoch, round, net, criterion, optimizer, trainloader, device):
             outputs, emb = net(inputs)
         else:
             outputs = net(inputs)
-        # pdb.set_trace()
+
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
@@ -143,7 +145,6 @@ def test(epoch, args, net, criterion, testloader, device, msg, save_checkpoint=T
             correct += predicted.eq(targets).sum().item()
 
             logger.debug(f"correct={correct} / total {total}\n")
-
 
     # Save checkpoint.
     #TODO: why not save checkpoint every experiment? 
@@ -229,6 +230,7 @@ def distill(
     selection=False,
     lambda_=1,
     temperature_=1,
+    save_confidence=False,
     )->float: 
     
     logger.debug('\nEpoch: %d' % epoch)
@@ -337,6 +339,8 @@ def distill(
 
             save_all_output = [[] for _ in range(len(inputs))]
 
+            confidence_results = [[] for _ in range(len(inputs + 1))] # Add one position to store the true label
+
             # emb_mode determines how do we use emb
             # 'wavg' uses the norm of the emb to perform weighted average on softmax
             # 'dlc' uses the norm of the emb to drop edge workers 
@@ -355,6 +359,11 @@ def distill(
                 emb_flag = True
                 for idx, (input, target) in enumerate(zip(inputs, targets)):
                     input = input.unsqueeze(0)
+                    
+                    # Save the true label 
+                    if save_confidence:
+                                confidence_results[idx].append(target.item())
+                    
                     for i, edge_net in enumerate(edge_nets):
                         # logger.debug(f"Processing the {i} edge")
 
@@ -363,10 +372,29 @@ def distill(
                             edge_out, emb = edge_net(input)
                             embDim = edge_net.get_embedding_dim()
                             emb = emb.data.cpu().numpy()
-                            emb_norm = return_edge_norm(edge_out, emb)                            
+                            emb_norm = return_edge_norm(edge_out, emb)
                             save_all_output[idx].append((emb_norm, edge_out))
 
-                    # pdb.set_trace()
+                            if save_confidence:
+                                confidence_results[idx].append(emb_norm)
+
+                            #edge_predicted = edge_out.max(1)
+                            # No need to check this. 
+                            # This is already done before. 
+                            """
+                            edge_predicted is a tensor consists of the value and the index:
+                              torch.return_types.max(
+                              values=tensor([6.3136], device='cuda:0'),
+                              indices=tensor([8], device='cuda:0'))
+                            
+                            target is a tensor with the index: tensor(8, device='cuda:0')
+                            
+                            In order to compare them, we need to index twice on the edge_predicted
+                            edge_predicted[1] -> (tensor([8], device='cuda:0')
+                            edge_predicted[1][0] -> (tensor(8, device='cuda:0'))
+                            """
+
+                    
                     sorted_output = save_all_output[idx] # save the outputs from a batch 
                     
                     if emb_mode == 'wavg': # weighted average of all edge
@@ -376,8 +404,14 @@ def distill(
 
                     elif emb_mode == 'dlc': # dropping some edge workers
                         sorted_output.sort(key = lambda x : x[0]) # use the emb_norm to sort
-                        for i, e in enumerate(sorted_output[:-num_drop]):
-                            temp_res[i] = e[1] # the 1st idx in e is the model output
+                        
+                        # when num_drop == 0, this case is the same as FedDF
+                        if num_drop == 0:
+                            for i, e in enumerate(sorted_output):
+                                temp_res[i] = e[1] # the 1st idx in e is the model output
+                        else:
+                            for i, e in enumerate(sorted_output[:-num_drop]):
+                                temp_res[i] = e[1] # the 1st idx in e is the model output
                     else:
                         raise NotImplementedError("Not supported emb mode")
                         
@@ -411,13 +445,11 @@ def distill(
                 raise NotImplementedError("Not support weighted average now")
 
         loss_kd = kd_fun(s_max, t_max) / size_curr_batch
-        loss = loss_fun(out_s, targets)
-        
+        loss = loss_fun(out_s, targets)       
         loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
 
         loss_kd.backward()
         optimizer.step()
-
         train_loss += loss_kd.item()
         
         # We do not use the true labels to distill
@@ -433,7 +465,11 @@ def distill(
         # for only the progress_bar
         progress_bar(batch_idx, len(distill_loader))
         
-    return train_loss/(batch_idx+1)
+    
+    if save_confidence:
+        return train_loss/(batch_idx+1), confidence_results
+    else:
+        return train_loss/(batch_idx+1)
 
 
 def run_distill(
@@ -467,29 +503,39 @@ def run_distill(
     for epoch in range(args.cloud_epoch):
         
         # TODO: merge selection into average method
-        trainloss = distill(epoch,
-                            frozen_edge_nets,
-                            cloud, 
-                            optimizer, 
-                            trainloader_cloud, 
-                            device, 
-                            args.num_workers,
-                            args.split,
-                            args.distill_percent,
-                            dataset=args.dataset,
-                            average_method='grad', 
-                            select_mode='guided',
-                            emb_mode=args.emb_mode,
-                            num_drop=args.num_drop,
-                            selection=selection, 
-                            lambda_=args.lamb,
-                            temperature_=args.temp)
+        res = distill(epoch,
+                    frozen_edge_nets,
+                    cloud, 
+                    optimizer, 
+                    trainloader_cloud, 
+                    device, 
+                    args.num_workers,
+                    args.split,
+                    args.distill_percent,
+                    dataset=args.dataset,
+                    average_method='grad', 
+                    select_mode='guided',
+                    emb_mode=args.emb_mode,
+                    num_drop=args.num_drop,
+                    selection=selection, 
+                    lambda_=args.lamb,
+                    temperature_=args.temp,
+                    save_confidence=args.save_confidence)
+
 
         acc, best_acc = test(epoch, args, cloud, criterion_cloud, testloader_cloud, device, 'cloud')
 
-        logger.debug(f"The result is: {acc}")
-        # write_csv('results/' + args.workspace, 'distill_concat_' + strtime + '.csv', str(acc))
+        logger.debug(f"The result is: {acc}")        
         write_csv('results/' + args.workspace, prefix + strtime + '.csv', str(acc))
+        
+        # Debug confidence
+        # Now the distill function returns [trainloss, confidence_results]
+        if args.save_confidence:
+            trainloss = res[0]
+            confidence_results = res[1]
+            write_csv('results/' + args.workspace, 'confidence.csv', str(confidence_results))
+        else:
+            trainloss = res
 
         list_loss.append(trainloss)
 
@@ -626,9 +672,7 @@ if __name__ == "__main__":
 
     # Model
     logger.debug('==> Building model..')
-
     nets = []
-
 
     ################### Define models based on aggregation mode ###################
 
@@ -641,8 +685,7 @@ if __name__ == "__main__":
 
     elif args.aggregation_mode == 'fedavg':
         cloud_net = build_model_from_name(args.net, num_classes, device)
-        
-    
+            
     else:
         raise NotSupportedError("Aggregation mode not supported. Use 'distillation' or 'fedavg")
 
@@ -663,6 +706,7 @@ if __name__ == "__main__":
                         run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
                         logger.debug("Done edge training")
                     else:
+
                         run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, True, 'local', 'edge_' + str(i))
                 else:
                     if args.aggregation_mode == 'fedavg':
@@ -674,11 +718,14 @@ if __name__ == "__main__":
                         for i, model in enumerate(nets):
                             model.load_state_dict(cloud_w)
                     
+                    logger.info(f"Training the {i} edge")
                     run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
 
 
-        if args.aggregation_mode == 'distillation':                            
+        if args.aggregation_mode == 'distillation':            
+
             # Get the public data with the specified classes
+            
             run_distill(nets, 
                         cloud_net, 
                         args, 
@@ -712,6 +759,3 @@ if __name__ == "__main__":
             csv_name = 'acc_fedavg'  + '.csv'
             path = 'results/' + args.workspace
             write_csv(path, csv_name, str(acc))
-
-
-            
