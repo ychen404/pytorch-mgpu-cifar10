@@ -357,3 +357,4 @@ def count_targets(targets):
 def test_logging():
 
     logger.info("Hey there")
+    logger.debug("From test_logging")
