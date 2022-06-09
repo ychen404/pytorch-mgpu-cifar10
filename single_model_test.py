@@ -211,6 +211,8 @@ elif args.net =='res18':
     net = resnet18(num_classes=100)
 elif args.net =='res34':
     net = resnet34(num_classes=100)
+elif args.net =='vgg19':
+    net = VGG('VGG19')
 
 else:
     logger.debug("Not supported model")

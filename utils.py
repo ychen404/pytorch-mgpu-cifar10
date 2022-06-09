@@ -17,6 +17,7 @@ import datetime
 from models import *
 import torch.backends.cudnn as cudnn
 from plot_results import *
+import json
 
 logger = logging.getLogger('__name__')
 # logger.setLevel('DEBUG')
@@ -182,6 +183,11 @@ def write_csv(workspace, path, content):
     fullpath = workspace + '/' + path
     with open(fullpath, 'a+') as f:
         f.write(content + '\n')
+
+def save_json(workspace, path, content):
+    fullpath = workspace + '/' + path
+    with open(fullpath, 'w') as f:
+        json.dump(content, f)
 
 def print_param(model):
     for name, param in model.named_parameters():

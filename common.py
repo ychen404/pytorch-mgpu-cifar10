@@ -9,7 +9,8 @@ import torch.nn.functional as F
 import numpy as np
 from copy import deepcopy
 from utils import get_time, write_csv, freeze_net
-
+import argparse
+import pdb
 
 logger = logging.getLogger('__name__')
 
@@ -180,7 +181,6 @@ def distill(
         emb_norm = np.linalg.norm(embedding, 2)
         return emb_norm
     
-
     cloud_net.train()
     # logger.debug(f"model.train={cloud_net.training}")
     train_loss = 0
@@ -207,8 +207,6 @@ def distill(
     counter = 0
     # logger.debug(f"Lambda: {lambda_}")
     for batch_idx, (inputs, targets) in enumerate(distill_loader):
-        total = 0
-        correct = 0
 
         inputs, targets = inputs.to(device), targets.to(device)
         
@@ -223,6 +221,7 @@ def distill(
         s_max = F.log_softmax(out_s / T, dim=1)
 
         out_t_temp = []
+
 
         if selection: # direct the data to edge worker based on classes 
             logger.debug(f"Selection")
@@ -253,24 +252,19 @@ def distill(
             assert out_t.shape[1] == 100, f"the shape is {out_t.shape}, should be (x, 100)"
             t_max = F.softmax(out_t / T, dim=1)
         
+        # Other methods
         else:
             # Use torch.zeros(128,100) to create the placeholder
             out_t = torch.zeros((size_curr_batch, total_classes), device=device)
             t_max = torch.zeros((size_curr_batch, total_classes), device=device)
             
-            # create place holder for emb method
-            batch_memory = [-1] * size_curr_batch
-            norm_idx = 1
-            output_idx = 2
-
             save_all_output = [[] for _ in range(len(inputs))]
-
             confidence_results = [[] for _ in range(len(inputs + 1))] # Add one position to store the true label
 
             # emb_mode determines how do we use emb
             # 'wavg' uses the norm of the emb to perform weighted average on softmax
             # 'dlc' uses the norm of the emb to drop edge workers 
-            if emb_mode == 'wavg': # if not dropping any edge, the holder should be able to hold all the edge res
+            if emb_mode == 'wavg' or emb_mode == 'fedet': # if not dropping any edge, the holder should be able to hold all the edge res
                 temp_res = torch.empty((len(edge_nets), total_classes), device=device)    
             
             else:
@@ -281,52 +275,64 @@ def distill(
             emb_flag = False
             
             # TODO: Need to add a method to distinguish with other
-            if emb_mode == 'dlc' or emb_mode == 'wavg':
+            if emb_mode == 'dlc' or emb_mode == 'wavg' or emb_mode == 'fedet':
                 emb_flag = True
                 for idx, (input, target) in enumerate(zip(inputs, targets)):
                     input = input.unsqueeze(0)
                     
-                    # Save the true label 
+                    # Save the true label to the confidence output
                     if save_confidence:
                                 confidence_results[idx].append(target.item())
                     
                     for i, edge_net in enumerate(edge_nets):
-                        # logger.debug(f"Processing the {i} edge")
-
+                        # TODO: use the emb model as only case to simplify
                         if hasattr(edge_net, 'emb') and edge_net.emb:
-
+                        
                             edge_out, emb = edge_net(input)
                             embDim = edge_net.get_embedding_dim()
                             emb = emb.data.cpu().numpy()
-                            emb_norm = return_edge_norm(edge_out, emb)
-                            save_all_output[idx].append((emb_norm, edge_out))
 
-                            if save_confidence:
-                                confidence_results[idx].append(emb_norm)
+                            if emb_mode == 'fedet':
+                                # Save the softmax output from each image
+                                # pdb.set_trace()
+                                
+                                edge_softmax = F.softmax(edge_out, dim=1)
+                                
+                                softmax_var = torch.var(edge_softmax)
+                                save_all_output[idx].append((softmax_var.item(), edge_softmax))
+                                # pdb.set_trace()
+                                
+                            if emb_mode == 'dlc' or emb_mode == 'wavg':
+                     
+                                emb_norm = return_edge_norm(edge_out, emb)
+                                save_all_output[idx].append((emb_norm, edge_out))
 
-                            #edge_predicted = edge_out.max(1)
-                            # No need to check this. 
-                            # This is already done before. 
-                            """
-                            edge_predicted is a tensor consists of the value and the index:
-                              torch.return_types.max(
-                              values=tensor([6.3136], device='cuda:0'),
-                              indices=tensor([8], device='cuda:0'))
-                            
-                            target is a tensor with the index: tensor(8, device='cuda:0')
-                            
-                            In order to compare them, we need to index twice on the edge_predicted
-                            edge_predicted[1] -> (tensor([8], device='cuda:0')
-                            edge_predicted[1][0] -> (tensor(8, device='cuda:0'))
-                            """
+                                if save_confidence:
+                                    confidence_results[idx].append(emb_norm)
 
-                    
+                                #edge_predicted = edge_out.max(1)
+                                # No need to check this. 
+                                # This is already done before. 
+                                """
+                                edge_predicted is a tensor consists of the value and the index:
+                                torch.return_types.max(
+                                values=tensor([6.3136], device='cuda:0'),
+                                indices=tensor([8], device='cuda:0'))
+                                
+                                target is a tensor with the index: tensor(8, device='cuda:0')
+                                
+                                In order to compare them, we need to index twice on the edge_predicted
+                                edge_predicted[1] -> (tensor([8], device='cuda:0')
+                                edge_predicted[1][0] -> (tensor(8, device='cuda:0'))
+                                """
+                                            
                     sorted_output = save_all_output[idx] # save the outputs from a batch 
-                    
+
                     if emb_mode == 'wavg': # weighted average of all edge
                         sum_norm = sum(e[0] for e in sorted_output)
                         for i, e in enumerate(sorted_output):
-                            temp_res[i] = (e[0] / sum_norm) * e[1]
+                            # Low norm value has a higher weight
+                            temp_res[i] = ((sum_norm - e[0]) / sum_norm) * e[1]
 
                     elif emb_mode == 'dlc': # dropping some edge workers
                         sorted_output.sort(key = lambda x : x[0]) # use the emb_norm to sort
@@ -337,25 +343,41 @@ def distill(
                                 temp_res[i] = e[1] # the 1st idx in e is the model output
                         else:
                             for i, e in enumerate(sorted_output[:-num_drop]):
+                                # Large norm means low confidence
+                                # Drop the last worker with the largest norm
                                 temp_res[i] = e[1] # the 1st idx in e is the model output
+                    
+                    elif emb_mode == 'fedet':
+                        # pdb.set_trace()
+                        # Higher the variance, higher confidence
+                        
+                        sum_var = sum(e[0] for e in sorted_output)
+                        for i, e in enumerate(sorted_output):
+                            temp_res[i] = (e[0] / sum_var) * e[1]
+
                     else:
                         raise NotImplementedError("Not supported emb mode")
                         
                     # Calculate the average of the output of each sample
                     # Each output is torch.size([1,10])
                     # Use dim=0, the size of the mean is torch.size([10]), use keepdim to maintain the torch.size([1, 10])
-
-                    out_t_temp.append(temp_res.mean(dim=0, keepdim=True))
-                
+                    out_t_temp.append(temp_res.mean(dim=0, keepdim=True))                
+            
                 out_t = torch.cat(out_t_temp, dim=0) # use dim 0 to stack the tensors
-                
+            
+            
             #### Calculate model outputs from all edge models without dropping
             else:
                 for i, edge_net in enumerate(edge_nets):
                     edge_net = edge_net.to(device)
                     out_t += edge_net(inputs)
+            
+            # Except fedet, other modes calculate softmax at the last step
+            if emb_mode != 'fedet':
+                t_max += F.softmax(out_t / T, dim=1)
 
-            t_max += F.softmax(out_t / T, dim=1)
+            else: # fedet t_max is already available
+                t_max = out_t
             
             if average_method == 'equal':
                 logger.debug("Equal weights")
@@ -371,7 +393,7 @@ def distill(
                 raise NotImplementedError("Not support weighted average now")
 
         loss_kd = kd_fun(s_max, t_max) / size_curr_batch
-        loss = loss_fun(out_s, targets)       
+        loss = loss_fun(out_s, targets)
         loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
 
         loss_kd.backward()
@@ -396,7 +418,6 @@ def distill(
         return train_loss/(batch_idx+1), confidence_results
     else:
         return train_loss/(batch_idx+1)
-
 
 def run_distill(
     edge_nets,  
@@ -448,7 +469,6 @@ def run_distill(
                     temperature_=args.temp,
                     save_confidence=args.save_confidence)
 
-
         acc, best_acc = test(epoch, args, cloud, criterion_cloud, testloader_cloud, device, 'cloud')
 
         logger.debug(f"The result is: {acc}")        
@@ -459,7 +479,10 @@ def run_distill(
         if args.save_confidence:
             trainloss = res[0]
             confidence_results = res[1]
-            write_csv('results/' + args.workspace, 'confidence.csv', str(confidence_results))
+            # write_csv('results/' + args.workspace, 'confidence.csv', str(confidence_results))
+            from utils import save_json
+            save_json('results/' + args.workspace, 'confidence.json', confidence_results)
+
         else:
             trainloss = res
 

@@ -6,7 +6,7 @@
 # python3 single_model_test.py --net res6 --percent_classes 0.02 --percent_data 0.8 --workspace res6_2cls_80_percent && \
 # python3 single_model_test.py --net res6 --percent_classes 0.02 --percent_data 1 --workspace res6_2cls_100_percent
 
-CUDA_VISIBLE_DEVICES=1 python3 single_model_test.py --net res6 --dataset cifar10 --workspace res6_cifar10 --epoch 100 --percent_data 0.5
+CUDA_VISIBLE_DEVICES=1 python3 single_model_test.py --net vgg19 --dataset cifar10 --workspace vgg19_cifar10_0.7_data --epoch 100 --percent_data 0.7
 
 ################ Cifar100 ################
 # CUDA_VISIBLE_DEVICES=1 python3 single_model_test.py --net res34 --percent_classes 0.10 --percent_data 1 --workspace res34_10cls_100_percent

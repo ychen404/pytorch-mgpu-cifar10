@@ -46,4 +46,3 @@ def test_vgg():
     y = net(x)
     print(y.size())
 
-# test()

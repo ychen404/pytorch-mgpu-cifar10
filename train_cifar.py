@@ -6,10 +6,7 @@ from sqlite3 import NotSupportedError
 
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
 
-import argparse
 import logging
 import copy
 
@@ -24,8 +21,7 @@ from common import *
 
 logger = logging.getLogger('__name__')
 logger.setLevel('INFO')
-# fmt_str = '%(levelname)s - %(message)s'
-# fmt_file = '[%(levelname)s]: %(message)s'
+
 
 def parse_arguments():
 
@@ -76,12 +72,10 @@ def parse_arguments():
 
     return args
 
-
 if __name__ == "__main__":
 
     args = parse_arguments()
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-    # start_epoch = 0  # start from epoch 0 or last checkpoint epoch
     torch.manual_seed(0)
     print(args)
 
@@ -122,8 +116,8 @@ if __name__ == "__main__":
         trainloader = torch.utils.data.DataLoader(trainset_a, batch_size=args.batch_size, shuffle=True, num_workers=4)
     
     elif args.split != 0 and args.split_classes and not args.baseline:
+        
         # Use all data
-        # logger.info(f"is it here Using {int(args.split * 100)}% of training data and classifying {int(args.split * 100)}%")
         logger.info(f"is it here Using {int(args.split * 100)}% of training data and classifying {int(args.split * 100)}%")
 
         if args.exist_loader:
@@ -172,14 +166,11 @@ if __name__ == "__main__":
 
             # Use private data to perform distillation       
             else:
-                # trainloader, testloader = get_worker_data(trainset, args, workerid=0)
                 trainloaders = get_subclasses_loaders(trainset, args.num_workers, client_classes, num_workers=4, non_overlapped=True, seed=100)
                 trainloader_cloud = get_subclasses_loaders(trainset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, non_overlapped=True, seed=100)
 
-                # _, testloader_non_iid = get_worker_data_hardcode(trainset, args.split, workerid=0)
                 testloader_cloud = get_subclasses_loaders(testset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, non_overlapped=True, seed=100)
 
-                # logger.debug(testloader_non_iid[0])
                 testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, non_overlapped=True, seed=100)
 
         if args.save_loader:
@@ -253,8 +244,7 @@ if __name__ == "__main__":
                     logger.info(f"Training the {i} edge")
                     run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
 
-
-        if args.aggregation_mode == 'distillation':            
+        if args.aggregation_mode == 'distillation': 
 
             # Get the public data with the specified classes
             
@@ -267,7 +257,6 @@ if __name__ == "__main__":
                         device=device,
                         selection=args.selection, 
                         prefix='distill_')
-
         
         elif args.aggregation_mode == 'fedavg':
             
