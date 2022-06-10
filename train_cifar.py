@@ -145,7 +145,6 @@ if __name__ == "__main__":
                     # use 1 thread worker instead of 4 in the single gpu case
                     trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
                     class_select = client_classes
-                    # pdb.set_trace()
 
                 logger.info(f"Cloud Test data")
                 testloader_cloud = get_subclasses_loaders(testset, n_clients=1, client_classes=class_select, num_workers=4, non_overlapped=True, seed=100)
@@ -168,9 +167,7 @@ if __name__ == "__main__":
             else:
                 trainloaders = get_subclasses_loaders(trainset, args.num_workers, client_classes, num_workers=4, non_overlapped=True, seed=100)
                 trainloader_cloud = get_subclasses_loaders(trainset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, non_overlapped=True, seed=100)
-
                 testloader_cloud = get_subclasses_loaders(testset, n_clients=1, client_classes=int(args.num_workers * client_classes), num_workers=4, non_overlapped=True, seed=100)
-
                 testloaders = get_subclasses_loaders(testset, args.num_workers, client_classes, num_workers=4, non_overlapped=True, seed=100)
 
         if args.save_loader:

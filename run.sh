@@ -517,26 +517,50 @@
 #                 --public_percent 0.5
 
 ################ Fed-ET ################
-split=1
-CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
-                --workspace emb_diri_fedet_r_1_e_50_c_100_10cls_alpha_0.01_5workers \
-                --net res6_emb \
-                --cloud res18 \
-                --split $split \
-                --split_classes \
-                --partition_mode dirichlet \
-                --alpha 0.01 \
-                --dataset cifar10 \
-                --num_workers 5 \
-                --num_rounds 1 \
-                --epoch 50 \
-                --cloud_epoch 100 \
-                --optimizer adam \
-                --cloud_lr 0.001 \
-                --lr 0.1 \
-                --lamb 1 \
-                --temp 1 \
-                --public_distill \
-                --emb_mode fedet \
-                --aggregation_mode distillation \
-                --public_percent 0.5
+# split=1
+# CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+#                 --workspace emb_diri_fedet_r_1_e_50_c_100_10cls_alpha_0.01_5workers \
+#                 --net res6_emb \
+#                 --cloud res18 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 0.01 \
+#                 --dataset cifar10 \
+#                 --num_workers 5 \
+#                 --num_rounds 1 \
+#                 --epoch 50 \
+#                 --cloud_epoch 100 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --emb_mode fedet \
+#                 --aggregation_mode distillation \
+#                 --public_percent 0.5
+
+# split=1
+# CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
+#                 --workspace emb_diri_fedet_r_100_e_10_c_3_10cls_alpha_0.01_5workers \
+#                 --net res6_emb \
+#                 --cloud res6 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 0.01 \
+#                 --dataset cifar10 \
+#                 --num_workers 5 \
+#                 --num_rounds 100 \
+#                 --epoch 10 \
+#                 --cloud_epoch 3 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --emb_mode fedet \
+#                 --aggregation_mode distillation \
+#                 --public_percent 0.5
