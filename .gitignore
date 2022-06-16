@@ -99,6 +99,7 @@ two_worker_results/
 *.pth
 data/
 dataset/
+results/
 
 # Spyder project settings
 .spyderproject
