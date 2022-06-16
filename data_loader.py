@@ -46,8 +46,6 @@ def get_cifar10_loader(args, data_only=False):
         return trainloader, testloader
 
 
-
-
 def get_cifar10():
     
     transform_train = transforms.Compose([
@@ -68,6 +66,21 @@ def get_cifar10():
 
     return trainset, testset
 
+
+def get_cifar10_fedet():
+    
+    public_transform = transforms.Compose([
+                        transforms.RandomCrop(32, padding=4),
+                        transforms.RandomHorizontalFlip(),
+                        transforms.RandomApply(torch.nn.ModuleList([transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)]), p=0.8),
+                        transforms.RandomGrayscale(p=0.2),
+                        transforms.ToTensor(),
+                        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                        ])
+
+    public_transform = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=public_transform)
+
+    return public_transform
 
 def get_cifar100():
 
@@ -412,3 +425,45 @@ def get_subclasses_loaders(train_data, n_clients=3, client_classes=2, batch_size
 
     return client_loaders[0] if len(client_loaders) == 1 else client_loaders
     # return client_loaders
+
+def apply_transform(trainset):
+
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomApply(torch.nn.ModuleList([transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)]), p=0.8),
+        transforms.RandomGrayscale(p=0.2),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+    ])
+
+
+    trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
+
+
+    return trainset
+
+
+class MyDataset(Dataset):
+    """
+
+    https://discuss.pytorch.org/t/torch-utils-data-dataset-random-split/32209/4
+
+    This class enables applying transform to a Subset object
+    It is used to test FedET, which requires a different augmentation on the public dataset
+    It only works with the torch.utils.data.DataLoader method. 
+    It fails when using the subclass_loader. We can look into this later. 
+
+    """
+    def __init__(self, subset, transform=None):
+        self.subset = subset
+        self.transform = transform
+        
+    def __getitem__(self, index):
+        x, y = self.subset[index]
+        if self.transform:
+            x = self.transform(x)
+        return x, y
+        
+    def __len__(self):
+        return len(self.subset)

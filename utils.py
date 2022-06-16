@@ -186,7 +186,7 @@ def write_csv(workspace, path, content):
 
 def save_json(workspace, path, content):
     fullpath = workspace + '/' + path
-    with open(fullpath, 'w') as f:
+    with open(fullpath, 'a+') as f:
         json.dump(content, f)
 
 def print_param(model):
@@ -285,7 +285,10 @@ def build_model_from_name(name, num_classes, device):
         net = resnet6(num_classes=num_classes, emb=True)
 
     elif name == 'res8':
-        net = resnet8(num_classes=num_classes)    
+        net = resnet8(num_classes=num_classes)
+
+    elif name == 'res8_emb':
+        net = resnet8(num_classes=num_classes, emb=True)    
 
     elif name == 'res50':
         net = resnet50(num_classes=num_classes)
@@ -359,6 +362,9 @@ def count_targets(targets):
 
     logger.debug(f"alpha: {alpha}, beta: {beta}, gamma: {gamma}")
     return alpha, beta, gamma 
+
+
+
 
 def test_logging():
 

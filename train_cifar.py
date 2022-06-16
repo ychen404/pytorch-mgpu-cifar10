@@ -23,6 +23,7 @@ logger = logging.getLogger('__name__')
 logger.setLevel('INFO')
 
 
+
 def parse_arguments():
 
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
@@ -54,6 +55,7 @@ def parse_arguments():
     parser.add_argument('--alpha', default=100, type=float, help='alpha for dirichle partition')
     parser.add_argument('--lamb', default=0.5, type=float, help='lambda for distillation')
     parser.add_argument('--temp', default=1, type=float, help='temperature for distillation')
+    parser.add_argument('--beta', default=0.05, type=float, help='weight for diversity regularization in fedet')
     parser.add_argument('--public_percent', default=0.5, type=float, help='percentage training data to be public')
     parser.add_argument('--distill_percent', default=1, type=float, help='percentage of public data use for distillation')
     parser.add_argument('--vary_epoch', action='store_true', help="change the number of local epochs of edges")
@@ -61,7 +63,7 @@ def parse_arguments():
 
     ######################### Aggregation Parameters #########################
     parser.add_argument('--selection', action='store_true', help="enable selection method")
-    parser.add_argument('--emb_mode', default='dlc', help="[dlc, wavg]")
+    parser.add_argument('--emb_mode', default='dlc', help="[dlc, wavg, fedet]")
     parser.add_argument('--num_drop', default=1, type=int, help='number of edges to be dropped')
     parser.add_argument('--finetune', action='store_true', help="finetune the cloud model") # test fine-tune
     parser.add_argument('--finetune_epoch', default=10, type=int, help='number of epochs for finetune')
@@ -76,6 +78,8 @@ if __name__ == "__main__":
 
     args = parse_arguments()
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    # device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     torch.manual_seed(0)
     print(args)
 
@@ -95,6 +99,9 @@ if __name__ == "__main__":
         logger.info('==> CIFAR-10')
         trainset, testset = get_cifar10()
 
+        if args.emb_mode == 'fedet':
+            trainset_fedet = get_cifar10_fedet()
+
     elif args.dataset == 'cifar100':
         logger.info('==> CIFAR-100')
         trainset, testset = get_cifar100()
@@ -104,7 +111,11 @@ if __name__ == "__main__":
         raise NotImplementedError("Not supported dataset")
 
     if args.public_distill: 
-        trainset_public, trainset_private = split_train_data(trainset, args.public_percent)
+        trainset_public, trainset_private = split_train_data(trainset, args.public_percent) 
+
+        if args.emb_mode == "fedet":
+            trainset_public, _ = split_train_data(trainset_fedet, args.public_percent)
+        
         # Use 10% of the public dataset
         if args.distill_percent != 1:
             # do notthing for now (moved insided the distillation function)
@@ -145,7 +156,7 @@ if __name__ == "__main__":
                     # use 1 thread worker instead of 4 in the single gpu case
                     trainloaders = get_dirichlet_loaders(extract_trainset, n_clients=args.num_workers, alpha=args.alpha, num_workers=1, seed=100)
                     class_select = client_classes
-
+                
                 logger.info(f"Cloud Test data")
                 testloader_cloud = get_subclasses_loaders(testset, n_clients=1, client_classes=class_select, num_workers=4, non_overlapped=True, seed=100)
 
@@ -161,8 +172,10 @@ if __name__ == "__main__":
                     raise NotImplementedError("Not supported partition mode")
 
                 logger.info(f"Cloud Train loader")
+                
                 trainloader_cloud = get_subclasses_loaders(trainset_public, n_clients=1, client_classes=client_classes, num_workers=4, non_overlapped=True, seed=100)
 
+            
             # Use private data to perform distillation       
             else:
                 trainloaders = get_subclasses_loaders(trainset, args.num_workers, client_classes, num_workers=4, non_overlapped=True, seed=100)
@@ -215,7 +228,7 @@ if __name__ == "__main__":
             nets[i] = load_edge_checkpoint_fullpath(nets[i], ckpt_paths[i])
 
     for round in range(args.num_rounds):        
-        logger.debug(f"############# round {round} #############")
+        logger.info(f"############# round {round} #############")
         nets = check_model_trainable(nets)
         for i in range(args.num_workers):
             if not args.resume:
@@ -225,7 +238,6 @@ if __name__ == "__main__":
                         run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
                         logger.debug("Done edge training")
                     else:
-
                         run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, True, 'local', 'edge_' + str(i))
                 else:
                     if args.aggregation_mode == 'fedavg':
@@ -253,7 +265,7 @@ if __name__ == "__main__":
                         worker_num=0, 
                         device=device,
                         selection=args.selection, 
-                        prefix='distill_')
+                        prefix='distill')
         
         elif args.aggregation_mode == 'fedavg':
             
@@ -262,7 +274,6 @@ if __name__ == "__main__":
             for i, model in enumerate(nets):
 
                 w = model.state_dict()
-                # edge_models.append(model)              
                 all_weights.append(copy.deepcopy(w))
         
             logger.debug(f"Length of all_weights: {len(all_weights)}")

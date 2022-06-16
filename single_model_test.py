@@ -1,3 +1,4 @@
+from xml.dom import NotSupportedErr
 from train_cifar import build_model_from_name, print_total_params
 import torch
 import torch.nn as nn
@@ -32,7 +33,7 @@ c_handler.setFormatter(c_format)
 
 # epoch=200
 # batch_size=128
-device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 start_epoch=0
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR100 Training')
@@ -45,7 +46,6 @@ parser.add_argument('--workspace', default='test_workspace')
 parser.add_argument('--dataset', default='cifar100')
 parser.add_argument("--percent_classes", default=1, type=float, help="how many classes to classify")
 parser.add_argument("--percent_data", default=1, type=float, help="percentage of data to use for training")
-
 
 args = parser.parse_args()
 
@@ -155,8 +155,6 @@ elif args.dataset == "cifar10":
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True, num_workers=4)
 
     testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
-    # testloader = torch.utils.data.DataLoader(testset, batch_size=args.bs, shuffle=False, num_workers=4)
-
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 
@@ -176,10 +174,7 @@ elif args.dataset == "imagenet":
     datapath = '/home/users/yitao/downsampled_imagenet/imagenet32'
 
     trainset = ImageNetDownSample(root=datapath, train=True, transform=transform_train)
-    # trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=4)
-
     testset = ImageNetDownSample(root=datapath, train=False, transform=transform_test)
-    # testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=4)
 
 if args.percent_classes != 1:
     trainset = extract_classes(trainset, args.percent_classes, workerid=0)
@@ -188,9 +183,6 @@ if args.percent_classes != 1:
     if args.percent_data != 1:
         trainloaders = get_dirichlet_loaders(trainset, n_clients=int(1/args.percent_data), alpha=100)
         trainloader = trainloaders[0]
-        # trainset, part_b = split_train_data(trainset, args.percent_data)
-        # target_length = int(length * args.percent_classes * args.percent_data)
-        # assert len(trainset) == target_length, f"Wrong target length. trainset: {len(trainset)} target: {target_length}"
 
     else:
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True, num_workers=4)
@@ -201,21 +193,27 @@ print('==> Building model..')
 
 nc = 100 if args.dataset == "cifar100" else 1000
 
+if args.dataset == 'cifar10':
+    nc = 10
+elif args.dataset == 'cifar100':
+    nc = 100
+else:
+    nc = 1000
+
 if args.net == 'res4':
-    net = resnet4(num_classes=100)
+    net = resnet4(num_classes=nc)
 elif args.net == 'res8':
-    net = resnet8(num_classes=100)
+    net = resnet8(num_classes=nc)
 elif args.net == 'res6':
-    net = resnet6(num_classes=100)
+    net = resnet6(num_classes=nc)
 elif args.net =='res18':
-    net = resnet18(num_classes=100)
+    net = resnet18(num_classes=nc)
 elif args.net =='res34':
-    net = resnet34(num_classes=100)
+    net = resnet34(num_classes=nc)
 elif args.net =='vgg19':
     net = VGG('VGG19')
-
 else:
-    logger.debug("Not supported model")
+    raise NotSupportedErr("Not supported model")
 
 print_total_params(net)
 net = net.to(device)
@@ -245,7 +243,6 @@ for epoch in range(args.epoch):
     trainloss = train(epoch)
     acc = test_acc(epoch)
     logger.debug(f"The result is: {acc}")
-    # write_csv('acc_' + args.workspace + '_worker_0' + 'res8_' + '.csv', str(acc))
     write_csv('results/' + args.workspace, 'acc_' +  str(args.net) + '_' + strtime + '.csv', str(acc))
     if acc > best_acc:
         logger.debug(f"Saving model...")

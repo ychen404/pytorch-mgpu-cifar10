@@ -115,8 +115,11 @@ def run_train(net, round, args, trainloader, testloader, testloader_local, worke
     optimizer_edge = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
     # Save csv files during training
-    csv_name = 'acc_'  + 'worker_' + str(worker_num) + '_' + strtime + '.csv'
-    csv_name_local = 'acc_'  + 'worker_' + str(worker_num) + '_' + strtime + '_' + 'local' + '.csv'
+    # csv_name = 'acc_'  + 'worker_' + str(worker_num) + '_' + strtime + '.csv'
+    # csv_name_local = 'acc_'  + 'worker_' + str(worker_num) + '_' + strtime + '_' + 'local' + '.csv'
+
+    csv_name = 'acc_'  + 'worker_' + str(worker_num) + '.csv'
+    csv_name_local = 'acc_'  + 'worker_' + str(worker_num) + '_' + 'local' + '.csv'
     path = 'results/' + args.workspace
         
     # Simple test (remove later)
@@ -157,6 +160,7 @@ def distill(
     selection=False,
     lambda_=1,
     temperature_=1,
+    beta_ = 0.5,
     save_confidence=False,
     )->float: 
     
@@ -205,9 +209,17 @@ def distill(
         bounds.append([start, end])
 
     counter = 0
-    # logger.debug(f"Lambda: {lambda_}")
-    for batch_idx, (inputs, targets) in enumerate(distill_loader):
 
+    #TODO: current implementation of save confidence is slow
+    # The reason could be the huge array size
+    # Change it to directly write to file may help
+    cidx = 0 # global index to save all confidence results
+    num_batches = len(distill_loader)
+    
+    distill_images = int(50000 * 0.5)    
+    # confidence_results = [[] for _ in range(num_batches * 128)] # Add one position to store the true label
+    confidence_results = [[] for _ in range(distill_images)] # Hardcode for debugging 
+    for batch_idx, (inputs, targets) in enumerate(distill_loader):       
         inputs, targets = inputs.to(device), targets.to(device)
         
         if batch_idx % 10 == 0:
@@ -215,12 +227,13 @@ def distill(
         
         optimizer.zero_grad()
         counter += 1
+        
         out_s = cloud_net(inputs)
-
         size_curr_batch = out_s.shape[0]
         s_max = F.log_softmax(out_s / T, dim=1)
 
         out_t_temp = []
+        out_t_minor_temp = [] # used to store the model output that does not match the consensus
 
 
         if selection: # direct the data to edge worker based on classes 
@@ -259,13 +272,14 @@ def distill(
             t_max = torch.zeros((size_curr_batch, total_classes), device=device)
             
             save_all_output = [[] for _ in range(len(inputs))]
-            confidence_results = [[] for _ in range(len(inputs + 1))] # Add one position to store the true label
-
+            # confidence_results = [[] for _ in range(len(inputs + 1))] # Add one position to store the true label
+            
             # emb_mode determines how do we use emb
             # 'wavg' uses the norm of the emb to perform weighted average on softmax
             # 'dlc' uses the norm of the emb to drop edge workers 
             if emb_mode == 'wavg' or emb_mode == 'fedet': # if not dropping any edge, the holder should be able to hold all the edge res
                 temp_res = torch.empty((len(edge_nets), total_classes), device=device)    
+                temp_res_minor = torch.empty((len(edge_nets), total_classes), device=device)    
             
             else:
                 # The output size of each sample is torch.Size([1, 10]) for cifar10
@@ -282,7 +296,9 @@ def distill(
                     
                     # Save the true label to the confidence output
                     if save_confidence:
-                                confidence_results[idx].append(target.item())
+                                # confidence_results[idx].append(target.item())
+                                confidence_results[cidx].append(target.item())
+
                     
                     for i, edge_net in enumerate(edge_nets):
                         # TODO: use the emb model as only case to simplify
@@ -296,8 +312,7 @@ def distill(
                                 # Save the softmax output from each image
                                 # pdb.set_trace()
                                 
-                                edge_softmax = F.softmax(edge_out, dim=1)
-                                
+                                edge_softmax = F.softmax(edge_out, dim=1)                               
                                 softmax_var = torch.var(edge_softmax)
                                 save_all_output[idx].append((softmax_var.item(), edge_softmax))
                                 # pdb.set_trace()
@@ -308,7 +323,8 @@ def distill(
                                 save_all_output[idx].append((emb_norm, edge_out))
 
                                 if save_confidence:
-                                    confidence_results[idx].append(emb_norm)
+                                    confidence_results[cidx].append(emb_norm)
+            
 
                                 #edge_predicted = edge_out.max(1)
                                 # No need to check this. 
@@ -325,24 +341,24 @@ def distill(
                                 edge_predicted[1] -> (tensor([8], device='cuda:0')
                                 edge_predicted[1][0] -> (tensor(8, device='cuda:0'))
                                 """
-                                            
-                    sorted_output = save_all_output[idx] # save the outputs from a batch 
+                    cidx += 1
+                    batch_output = save_all_output[idx] # save the outputs from a batch
 
                     if emb_mode == 'wavg': # weighted average of all edge
-                        sum_norm = sum(e[0] for e in sorted_output)
-                        for i, e in enumerate(sorted_output):
+                        sum_norm = sum(e[0] for e in batch_output)
+                        for i, e in enumerate(batch_output):
                             # Low norm value has a higher weight
                             temp_res[i] = ((sum_norm - e[0]) / sum_norm) * e[1]
 
                     elif emb_mode == 'dlc': # dropping some edge workers
-                        sorted_output.sort(key = lambda x : x[0]) # use the emb_norm to sort
+                        batch_output.sort(key = lambda x : x[0]) # use the emb_norm to sort
                         
                         # when num_drop == 0, this case is the same as FedDF
                         if num_drop == 0:
-                            for i, e in enumerate(sorted_output):
+                            for i, e in enumerate(batch_output):
                                 temp_res[i] = e[1] # the 1st idx in e is the model output
                         else:
-                            for i, e in enumerate(sorted_output[:-num_drop]):
+                            for i, e in enumerate(batch_output[:-num_drop]):
                                 # Large norm means low confidence
                                 # Drop the last worker with the largest norm
                                 temp_res[i] = e[1] # the 1st idx in e is the model output
@@ -350,21 +366,36 @@ def distill(
                     elif emb_mode == 'fedet':
                         # pdb.set_trace()
                         # Higher the variance, higher confidence
+                        model_prediction = [] # use to calculate concesus
+                        consensus = 0
                         
-                        sum_var = sum(e[0] for e in sorted_output)
-                        for i, e in enumerate(sorted_output):
+                        sum_var = sum(e[0] for e in batch_output)
+                        for i, e in enumerate(batch_output):
                             temp_res[i] = (e[0] / sum_var) * e[1]
-
+                            model_prediction.append(e[1].max(1)[1].item()) # append the top1 prediction
+                        
+                        np_prediction = np.array(model_prediction)
+                        consensus = np.bincount(np_prediction).argmax()
+                        
+                        for i, e in enumerate(batch_output):
+                            if model_prediction[i] != consensus:
+                                temp_res_minor[i] = (e[0] / sum_var) * e[1]
+                            
                     else:
                         raise NotImplementedError("Not supported emb mode")
                         
                     # Calculate the average of the output of each sample
                     # Each output is torch.size([1,10])
                     # Use dim=0, the size of the mean is torch.size([10]), use keepdim to maintain the torch.size([1, 10])
-                    out_t_temp.append(temp_res.mean(dim=0, keepdim=True))                
+                    out_t_temp.append(temp_res.mean(dim=0, keepdim=True))
+
+                    if emb_mode == 'fedet':
+                        out_t_minor_temp.append(temp_res_minor.mean(dim=0, keepdim=True))
             
                 out_t = torch.cat(out_t_temp, dim=0) # use dim 0 to stack the tensors
-            
+
+                if emb_mode == 'fedet':
+                    out_t_minor = torch.cat(out_t_minor_temp, dim=0)
             
             #### Calculate model outputs from all edge models without dropping
             else:
@@ -377,7 +408,9 @@ def distill(
                 t_max += F.softmax(out_t / T, dim=1)
 
             else: # fedet t_max is already available
+                
                 t_max = out_t
+                t_max_minor = out_t_minor
             
             if average_method == 'equal':
                 logger.debug("Equal weights")
@@ -394,7 +427,13 @@ def distill(
 
         loss_kd = kd_fun(s_max, t_max) / size_curr_batch
         loss = loss_fun(out_s, targets)
-        loss_kd =(1 - lambda_) * loss + lambda_ * T * T * loss_kd
+        
+        if emb_mode == 'fedet':
+            loss_kd_minor = kd_fun(s_max, t_max_minor) / size_curr_batch
+            loss_kd = (1 - lambda_) * loss + lambda_ * T * T * loss_kd + beta_ * loss_kd_minor
+
+        else:
+            loss_kd = (1 - lambda_) * loss + lambda_ * T * T * loss_kd
 
         loss_kd.backward()
         optimizer.step()
@@ -467,12 +506,14 @@ def run_distill(
                     selection=selection, 
                     lambda_=args.lamb,
                     temperature_=args.temp,
+                    beta_=args.beta,
                     save_confidence=args.save_confidence)
 
         acc, best_acc = test(epoch, args, cloud, criterion_cloud, testloader_cloud, device, 'cloud')
 
         logger.debug(f"The result is: {acc}")        
-        write_csv('results/' + args.workspace, prefix + strtime + '.csv', str(acc))
+        # write_csv('results/' + args.workspace, prefix + strtime + '.csv', str(acc))
+        write_csv('results/' + args.workspace, prefix + '.csv', str(acc))
         
         # Debug confidence
         # Now the distill function returns [trainloss, confidence_results]
