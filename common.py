@@ -11,6 +11,8 @@ from copy import deepcopy
 from utils import get_time, write_csv, freeze_net
 import argparse
 import pdb
+from utils import save_json
+
 
 logger = logging.getLogger('__name__')
 
@@ -27,7 +29,7 @@ def train(epoch, round, net, criterion, optimizer, trainloader, device):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         
-        if net.emb:
+        if hasattr(net, 'emb') and net.emb:
             outputs, emb = net(inputs)
         else:
             outputs = net(inputs)
@@ -80,6 +82,7 @@ def test(epoch, args, net, criterion, testloader, device, msg, save_checkpoint=T
     #TODO: why not save checkpoint every experiment? 
     acc = 100.*correct/total
     logger.debug(f"acc: {acc}, best_acc: {best_acc}")
+    test_loss /= total
 
     if acc > best_acc:
         state = {
@@ -95,7 +98,7 @@ def test(epoch, args, net, criterion, testloader, device, msg, save_checkpoint=T
             torch.save(state, checkpoint_dir + msg +'_ckpt.t7')
         best_acc = acc
             
-    return acc, best_acc
+    return acc, best_acc, test_loss
 
 
 def run_train(net, round, args, trainloader, testloader, testloader_local, worker_num, device, vary_epoch, mode, msg):
@@ -112,7 +115,16 @@ def run_train(net, round, args, trainloader, testloader, testloader_local, worke
     list_loss = []
     strtime = get_time()
     criterion_edge = nn.CrossEntropyLoss()
-    optimizer_edge = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+
+    if args.no_decay:
+        optimizer_edge = optim.SGD(net.parameters(), lr=args.lr)
+    else:
+        optimizer_edge = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    
+    if args.lr_sched == 'multistep':
+        logger.info(f"Using multistep")
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer_edge,
+                                                            milestones=[100, 150])
 
     # Save csv files during training
     # csv_name = 'acc_'  + 'worker_' + str(worker_num) + '_' + strtime + '.csv'
@@ -120,6 +132,7 @@ def run_train(net, round, args, trainloader, testloader, testloader_local, worke
 
     csv_name = 'acc_'  + 'worker_' + str(worker_num) + '.csv'
     csv_name_local = 'acc_'  + 'worker_' + str(worker_num) + '_' + 'local' + '.csv'
+    csv_name_loss = 'acc_'  + 'worker_' + str(worker_num) + '_loss' + '.csv'
     path = 'results/' + args.workspace
         
     # Simple test (remove later)
@@ -127,14 +140,19 @@ def run_train(net, round, args, trainloader, testloader, testloader_local, worke
         args.epoch = 1
 
     # for epoch in range(start_epoch, start_epoch + args.epoch):   
-    for epoch in range(args.epoch):     
+    for epoch in range(args.epoch): 
+        logger.info('current lr {:.5e}'.format(optimizer_edge.param_groups[0]['lr']))    
         trainloss = train(epoch, round, net, criterion_edge, optimizer_edge, trainloader, device)
-        acc, best_acc = test(epoch, args, net, criterion_edge, testloader, device, msg)
+        if args.lr_sched == 'multistep':
+            lr_scheduler.step()
+        
+        acc, best_acc, edge_loss = test(epoch, args, net, criterion_edge, testloader, device, msg)
         logger.debug(f"The result is: {acc}")
         write_csv(path, csv_name, str(acc))
+        write_csv(path, csv_name_loss, str(edge_loss))
 
         if mode == 'local':
-            acc_local, _ = test(epoch, args, net, criterion_edge, testloader_local, device, msg)
+            acc_local, _, _ = test(epoch, args, net, criterion_edge, testloader_local, device, msg)
             write_csv(path, csv_name_local, str(acc_local))
 
         list_loss.append(trainloss)
@@ -147,11 +165,13 @@ def distill(
     edge_nets, 
     cloud_net, 
     optimizer, 
-    distill_loader, 
+    lr_sched,
+    total_cloud_epoch,
+    distill_loader,
     device,
     num_workers,
     split,
-    distill_percent, 
+    distill_percent,
     dataset,
     average_method,
     select_mode,
@@ -185,7 +205,22 @@ def distill(
         emb_norm = np.linalg.norm(embedding, 2)
         return emb_norm
     
+
+
+    if lr_sched == 'multistep':
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+                                                            milestones=[100, 150])
+    elif lr_sched == None:
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+                                                            milestones=[65533])
+    elif lr_sched == 'cos':
+        lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=total_cloud_epoch, eta_min=0)
+    else:
+        raise NotImplementedError("Not supported")
+    
+    
     cloud_net.train()
+
     # logger.debug(f"model.train={cloud_net.training}")
     train_loss = 0
     loss_fun = nn.CrossEntropyLoss()
@@ -218,10 +253,11 @@ def distill(
     
     distill_images = int(50000 * 0.5)    
     # confidence_results = [[] for _ in range(num_batches * 128)] # Add one position to store the true label
-    confidence_results = [[] for _ in range(distill_images)] # Hardcode for debugging 
+    # confidence_results = [[] for _ in range(distill_images)] # Hardcode for debugging 
+    confidence_results = []
     for batch_idx, (inputs, targets) in enumerate(distill_loader):       
         inputs, targets = inputs.to(device), targets.to(device)
-        
+
         if batch_idx % 10 == 0:
             logger.debug(f"Processing batch {batch_idx}")
         
@@ -272,7 +308,6 @@ def distill(
             t_max = torch.zeros((size_curr_batch, total_classes), device=device)
             
             save_all_output = [[] for _ in range(len(inputs))]
-            # confidence_results = [[] for _ in range(len(inputs + 1))] # Add one position to store the true label
             
             # emb_mode determines how do we use emb
             # 'wavg' uses the norm of the emb to perform weighted average on softmax
@@ -294,10 +329,12 @@ def distill(
                 for idx, (input, target) in enumerate(zip(inputs, targets)):
                     input = input.unsqueeze(0)
                     
+                    current_batch_confidence = []
                     # Save the true label to the confidence output
                     if save_confidence:
                                 # confidence_results[idx].append(target.item())
-                                confidence_results[cidx].append(target.item())
+                                # confidence_results[cidx].append(target.item())
+                                current_batch_confidence.append(target.item())
 
                     
                     for i, edge_net in enumerate(edge_nets):
@@ -323,9 +360,9 @@ def distill(
                                 save_all_output[idx].append((emb_norm, edge_out))
 
                                 if save_confidence:
-                                    confidence_results[cidx].append(emb_norm)
+                                    # confidence_results[cidx].append(emb_norm)
+                                    current_batch_confidence.append(emb_norm)
             
-
                                 #edge_predicted = edge_out.max(1)
                                 # No need to check this. 
                                 # This is already done before. 
@@ -341,7 +378,10 @@ def distill(
                                 edge_predicted[1] -> (tensor([8], device='cuda:0')
                                 edge_predicted[1][0] -> (tensor(8, device='cuda:0'))
                                 """
-                    cidx += 1
+                    # cidx += 1
+                    # pdb.set_trace()
+
+                    confidence_results.append(current_batch_confidence)
                     batch_output = save_all_output[idx] # save the outputs from a batch
 
                     if emb_mode == 'wavg': # weighted average of all edge
@@ -437,6 +477,11 @@ def distill(
 
         loss_kd.backward()
         optimizer.step()
+
+        if lr_sched == 'cos':
+            lr_scheduler.step()
+            # print(f"current lr: {lr_scheduler.get_lr()}")
+        
         train_loss += loss_kd.item()
         
         # We do not use the true labels to distill
@@ -452,7 +497,6 @@ def distill(
         # for only the progress_bar
         progress_bar(batch_idx, len(distill_loader))
         
-    
     if save_confidence:
         return train_loss/(batch_idx+1), confidence_results
     else:
@@ -493,6 +537,8 @@ def run_distill(
                     frozen_edge_nets,
                     cloud, 
                     optimizer, 
+                    args.lr_sched, 
+                    args.cloud_epoch * args.num_rounds,
                     trainloader_cloud, 
                     device, 
                     args.num_workers,
@@ -509,11 +555,13 @@ def run_distill(
                     beta_=args.beta,
                     save_confidence=args.save_confidence)
 
-        acc, best_acc = test(epoch, args, cloud, criterion_cloud, testloader_cloud, device, 'cloud')
+        acc, best_acc, test_loss = test(epoch, args, cloud, criterion_cloud, testloader_cloud, device, 'cloud')
 
         logger.debug(f"The result is: {acc}")        
         # write_csv('results/' + args.workspace, prefix + strtime + '.csv', str(acc))
         write_csv('results/' + args.workspace, prefix + '.csv', str(acc))
+        write_csv('results/' + args.workspace, prefix + '_loss' + '.csv', str(test_loss))
+
         
         # Debug confidence
         # Now the distill function returns [trainloss, confidence_results]
@@ -521,13 +569,13 @@ def run_distill(
             trainloss = res[0]
             confidence_results = res[1]
             # write_csv('results/' + args.workspace, 'confidence.csv', str(confidence_results))
-            from utils import save_json
             save_json('results/' + args.workspace, 'confidence.json', confidence_results)
 
         else:
             trainloss = res
 
         list_loss.append(trainloss)
+    # save_json('results/' + args.workspace, 'loss.json', list_loss)
 
     logger.debug("===> BEST ACC. DISTILLATION: %.2f%%" % (best_acc))
 

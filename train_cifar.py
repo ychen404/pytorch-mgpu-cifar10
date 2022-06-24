@@ -23,7 +23,6 @@ logger = logging.getLogger('__name__')
 logger.setLevel('INFO')
 
 
-
 def parse_arguments():
 
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
@@ -39,6 +38,7 @@ def parse_arguments():
     parser.add_argument('--dataset', type=str, default='cifar10')
     parser.add_argument('--batch_size', type=int, default='128')
     parser.add_argument('--cloud_batch_size', type=int, default='128')
+    parser.add_argument('--lr_sched', default=None, help='multistep, cos')
     parser.add_argument('--workspace', default='')
     parser.add_argument("--split", default=0.1, type=float, help="split training data")
     parser.add_argument("--split_classes", action='store_true', help='split the number of classes to reduce difficulty')
@@ -47,6 +47,8 @@ def parse_arguments():
     parser.add_argument('--optimizer', default='sgd')
     parser.add_argument('--partition_mode', default='dirichlet')
     parser.add_argument('--aggregation_mode', default='distillation')
+    parser.add_argument("--no_decay", action='store_true', help='apply weight decay or not')
+
 
     ######################### Distillation Parameters #########################
     parser.add_argument('--public_distill', action='store_true', help="use public data to distill")
@@ -173,8 +175,9 @@ if __name__ == "__main__":
 
                 logger.info(f"Cloud Train loader")
                 
-                trainloader_cloud = get_subclasses_loaders(trainset_public, n_clients=1, client_classes=client_classes, num_workers=4, non_overlapped=True, seed=100)
-
+                # trainloader_cloud = get_subclasses_loaders(trainset_public, n_clients=1, client_classes=client_classes, num_workers=4, non_overlapped=True, seed=100)
+                # Simplify the loader since 
+                trainloader_cloud = get_loader(trainset_public, args)
             
             # Use private data to perform distillation       
             else:
@@ -209,8 +212,8 @@ if __name__ == "__main__":
     ################### Define models based on aggregation mode ###################
 
     for i in range(args.num_workers):
-            net = build_model_from_name(args.net, num_classes, device)
-            nets.append(net)
+            edge_net = build_model_from_name(args.net, num_classes, device)
+            nets.append(edge_net)
 
     if args.aggregation_mode == 'distillation':
         cloud_net = build_model_from_name(args.cloud, num_classes, device)
@@ -227,31 +230,31 @@ if __name__ == "__main__":
         for i in range(args.num_workers):
             nets[i] = load_edge_checkpoint_fullpath(nets[i], ckpt_paths[i])
 
-    for round in range(args.num_rounds):        
+    for round in range(args.num_rounds):
         logger.info(f"############# round {round} #############")
         nets = check_model_trainable(nets)
         for i in range(args.num_workers):
-            if not args.resume:
-                if args.vary_epoch:
-                    if i == 0: # test training only the first edge
-                        logger.debug(f"{args.num_workers}, {i}")
-                        run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
-                        logger.debug("Done edge training")
-                    else:
-                        run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, True, 'local', 'edge_' + str(i))
-                else:
-                    if args.aggregation_mode == 'fedavg':
-                        
-                        logger.info("Copying cloud weights")
-                        cloud_w = cloud_net.state_dict()
-                        
-                        # edge model loads the cloud weights
-                        logger.info("Edge loading cloud weights")
-                        for i, model in enumerate(nets):
-                            model.load_state_dict(cloud_w)
-                    
-                    logger.info(f"Training the {i} edge")
-                    run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
+            # logger.info(f"Training the {i} edge")          
+            # if not args.resume:
+            #     if args.vary_epoch:
+            #         if i == 0: # test training only the first edge
+            #             logger.debug(f"{args.num_workers}, {i}")
+            #             run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
+            #             logger.debug("Done edge training")
+            #         else:
+            #             run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, True, 'local', 'edge_' + str(i))
+            #     else:
+            if args.aggregation_mode == 'fedavg':
+                
+                logger.info("Copying cloud weights")
+                cloud_w = cloud_net.state_dict()
+                
+                # edge model loads the cloud weights
+                logger.info("Edge loading cloud weights")    
+                nets[i].load_state_dict(cloud_w)
+            
+            logger.info(f"Training the {i} edge")
+            run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
 
         if args.aggregation_mode == 'distillation': 
 

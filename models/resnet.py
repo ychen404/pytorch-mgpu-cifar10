@@ -380,7 +380,7 @@ def preact_resnet1001(**kwargs):
 
 
 if __name__ == "__main__":
-    net = resnet6(num_classes=10)
+    net = resnet8(num_classes=10)
     # print(net)
     total_params = sum(p.numel() for p in net.parameters())
     layers = len(list(net.modules()))

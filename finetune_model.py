@@ -26,12 +26,12 @@ def get_trainloader(train_data, batch_size):
     return train_loader
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-net = build_model_from_name(name, num_classes, device)
+edge_net = build_model_from_name(name, num_classes, device)
 
-net = load_edge_checkpoint_fullpath(net, 'results/iid_5_workers_res6_2_cls_public_distill/checkpoint/cloud_ckpt.t7')
-optimizer = optim.SGD(net.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+edge_net = load_edge_checkpoint_fullpath(edge_net, 'results/iid_5_workers_res6_2_cls_public_distill/checkpoint/cloud_ckpt.t7')
+optimizer = optim.SGD(edge_net.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
 
-print(net)
+print(edge_net)
 trainset, testset = get_cifar100()
 trainset_public, trainset_private = split_train_data(trainset, public_percent)
 trainset_public, _ = split_train_data(trainset_public, finetune_percent)
@@ -45,14 +45,14 @@ criterion = nn.CrossEntropyLoss()
 
 def train(epoch):
     print('\nEpoch: %d' % epoch)
-    net.train()
+    edge_net.train()
     train_loss = 0
     correct = 0
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        outputs = net(inputs)
+        outputs = edge_net(inputs)
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
@@ -69,14 +69,14 @@ def train(epoch):
     return train_loss/(batch_idx+1)
 
 def test_acc(testloader):
-    net.eval()
+    edge_net.eval()
     test_loss = 0
     correct = 0
     total = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
+            outputs = edge_net(inputs)
             loss = criterion(outputs, targets)
 
             test_loss += loss.item()

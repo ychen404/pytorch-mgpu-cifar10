@@ -312,31 +312,31 @@
 #                 --public_percent 0.5 \
 #                 --save_confidence
 
-split=0.2
-CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
-                --workspace check_confidence_uniform_5workers \
-                --net res6_emb \
-                --cloud res6 \
-                --split $split \
-                --split_classes \
-                --partition_mode uniform \
-                --alpha 0.01 \
-                --dataset cifar10 \
-                --num_workers 5 \
-                --num_rounds 1 \
-                --epoch 1 \
-                --cloud_epoch 1 \
-                --optimizer adam \
-                --cloud_lr 0.001 \
-                --lr 0.1 \
-                --lamb 1 \
-                --temp 1 \
-                --public_distill \
-                --emb_mode dlc \
-                --aggregation_mode distillation \
-                --public_percent 0.5 \
-                --save_confidence
-
+# split=0.2
+# CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+#                 --workspace check_confidence_res18_multistep_200ep_uniform_5workers \
+#                 --net res18_emb \
+#                 --cloud res6 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode uniform \
+#                 --alpha 0.01 \
+#                 --dataset cifar10 \
+#                 --num_workers 5 \
+#                 --num_rounds 1 \
+#                 --epoch 200 \
+#                 --cloud_epoch 1 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lr_sched multistep \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --emb_mode dlc \
+#                 --aggregation_mode distillation \
+#                 --public_percent 0.5 \
+#                 --save_confidence
 
 # split=0.2
 # CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
@@ -371,9 +371,9 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
 #                 --split $split \
 #                 --split_classes \
 #                 --partition_mode dirichlet \
-#                 --alpha 100 \
+#                 --alpha 0.01 \
 #                 --dataset cifar10 \
-#                 --num_workers 2 \
+#                 --num_workers 5 \
 #                 --num_rounds 1 \
 #                 --epoch 1 \
 #                 --cloud_epoch 1 \
@@ -392,18 +392,18 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
 
 # split=1
 # CUDA_VISIBLE_DEVICES=0 python3 train_cifar.py \
-#                 --workspace emb_diri_wavg_new_homo_r_1_e_50_c_100_10cls_alpha_100_5workers \
+#                 --workspace emb_diri_wavg_new_homo_r_100_e_10_c_50_10cls_alpha_0.01_5workers \
 #                 --net res6_emb \
 #                 --cloud res6 \
 #                 --split $split \
 #                 --split_classes \
 #                 --partition_mode dirichlet \
-#                 --alpha 100 \
+#                 --alpha 0.01 \
 #                 --dataset cifar10 \
 #                 --num_workers 5 \
-#                 --num_rounds 1 \
-#                 --epoch 50 \
-#                 --cloud_epoch 100 \
+#                 --num_rounds 100 \
+#                 --epoch 10 \
+#                 --cloud_epoch 50 \
 #                 --optimizer adam \
 #                 --cloud_lr 0.001 \
 #                 --lr 0.1 \
@@ -414,6 +414,29 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
 #                 --aggregation_mode distillation \
 #                 --public_percent 0.5
 
+split=1
+CUDA_VISIBLE_DEVICES=0 python3 train_cifar.py \
+                --workspace emb_diri_wavg_new_homo_r_100_e_10_c_30_10cls_alpha_0.01_5workers \
+                --net res6_emb \
+                --cloud res6 \
+                --split $split \
+                --split_classes \
+                --partition_mode dirichlet \
+                --alpha 0.01 \
+                --dataset cifar10 \
+                --num_workers 5 \
+                --num_rounds 100 \
+                --epoch 10 \
+                --cloud_epoch 30 \
+                --optimizer adam \
+                --cloud_lr 0.001 \
+                --lr 0.1 \
+                --lamb 1 \
+                --temp 1 \
+                --public_distill \
+                --emb_mode wavg \
+                --aggregation_mode distillation \
+                --public_percent 0.5
 
 # split=1
 # CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
@@ -429,6 +452,30 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
 #                 --num_rounds 1 \
 #                 --epoch 50 \
 #                 --cloud_epoch 100 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --emb_mode wavg \
+#                 --aggregation_mode distillation \
+#                 --public_percent 0.5
+
+# split=1
+# CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+#                 --workspace emb_diri_wavg_nodecay_r_100_e_10_c_3_10cls_alpha_100_5workers \
+#                 --net res6_emb \
+#                 --cloud res6 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 100 \
+#                 --dataset cifar10 \
+#                 --num_workers 5 \
+#                 --num_rounds 1 \
+#                 --epoch 10 \
+#                 --cloud_epoch 3 \
 #                 --optimizer adam \
 #                 --cloud_lr 0.001 \
 #                 --lr 0.1 \
@@ -515,8 +562,61 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
 
 # split=1
 # CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
-#                 --workspace emb_diri_dlc_10cls_fedavg_alpha_100_5workers \
+#                 --workspace emb_diri_10cls_fedavg_10ep_alpha_0.01_5workers \
 #                 --net res6_emb \
+#                 --cloud res6 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 0.01 \
+#                 --dataset cifar10 \
+#                 --num_workers 5 \
+#                 --num_rounds 100 \
+#                 --epoch 10 \
+#                 --cloud_epoch 10 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --emb_mode dlc \
+#                 --aggregation_mode fedavg \
+#                 --public_percent 0.5
+
+
+# ------------- No decay --------------
+# split=1
+# CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+#                 --workspace emb_diri_10cls_fedavg_nodecay_10ep_alpha_0.01_5workers \
+#                 --net res6_emb \
+#                 --cloud res6 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 0.01 \
+#                 --dataset cifar10 \
+#                 --num_workers 5 \
+#                 --num_rounds 100 \
+#                 --epoch 10 \
+#                 --cloud_epoch 10 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --no_decay \
+#                 --public_distill \
+#                 --emb_mode dlc \
+#                 --aggregation_mode fedavg \
+#                 --public_percent 0.5
+
+
+# ------------- Use akamaster resnet -------------
+# split=1
+# CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
+#                 --workspace emb_diri_akamaster_10cls_fedavg_alpha_100_5workers \
+#                 --net res8_aka \
 #                 --cloud res18 \
 #                 --split $split \
 #                 --split_classes \
@@ -539,21 +639,23 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
 
 ############## FedDF ##############
 # if drop no device, then the dlc method is equivalent to FedDF
-# 10 local epochs 
+# 10 local epochs
+
 # split=1
-# CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
-#                 --workspace emb_diri_feddf_r_100_e_10_c_3_10cls_alpha_0.01_5workers \
+# CUDA_VISIBLE_DEVICES=0 python3 train_cifar.py \
+#                 --workspace emb_diri_feddf_nodecay_cosineaneal_r_100_e_10_c_3_10cls_alpha_100_5workers \
 #                 --net res6_emb \
 #                 --cloud res6 \
 #                 --split $split \
 #                 --split_classes \
 #                 --partition_mode dirichlet \
-#                 --alpha 0.01 \
+#                 --alpha 100 \
 #                 --dataset cifar10 \
 #                 --num_workers 5 \
 #                 --num_rounds 100 \
 #                 --epoch 10 \
 #                 --cloud_epoch 3 \
+#                 --lr_sched cos \
 #                 --optimizer adam \
 #                 --cloud_lr 0.001 \
 #                 --lr 0.1 \

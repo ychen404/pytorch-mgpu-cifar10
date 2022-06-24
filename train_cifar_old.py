@@ -1177,8 +1177,8 @@ if __name__ == "__main__":
 
     nets = []
     for i in range(args.num_workers):
-        net = build_model_from_name(args.net, num_classes, device)
-        nets.append(net)
+        edge_net = build_model_from_name(args.net, num_classes, device)
+        nets.append(edge_net)
 
     cloud_net = build_model_from_name(args.cloud, num_classes, device)
 
@@ -1322,7 +1322,7 @@ if __name__ == "__main__":
                 # concat dataset private
                 # run_concat_distill_two(net[0], nets[1], cloud_net, args, trainloader_cloud, testloader_cloud, worker_num=0, device=device)
                 # Enable multiple edge models
-                run_concat_distill_multi(net[0], nets[1], cloud_net, args, trainloader_cloud, testloader_cloud, worker_num=0, device=device)
+                run_concat_distill_multi(edge_net[0], nets[1], cloud_net, args, trainloader_cloud, testloader_cloud, worker_num=0, device=device)
 
     else:
         logger.debug("Done experiment")

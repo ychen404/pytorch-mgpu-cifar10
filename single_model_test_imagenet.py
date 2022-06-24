@@ -95,14 +95,14 @@ def get_iterator_imagenet(imagenetpath, batch_size, nthread=4, mode='train'):
 
 def train(epoch):
     print('\nEpoch: %d' % epoch)
-    net.train()
+    edge_net.train()
     train_loss = 0
     correct = 0
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        outputs = net(inputs)
+        outputs = edge_net(inputs)
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
@@ -129,14 +129,14 @@ def save_checkpoint(net, acc):
     torch.save(state, checkpoint_dir + 'checkpoint.pt')
 
 def test_acc(epoch):
-    net.eval()
+    edge_net.eval()
     test_loss = 0
     correct = 0
     total = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
+            outputs = edge_net(inputs)
             loss = criterion(outputs, targets)
 
             test_loss += loss.item()
@@ -171,7 +171,7 @@ print(trainloader)
 
 print(len(trainloader), size)
 # net = resnet18(num_classes=1000)
-net = resnet10_pytorch(pretrained=False)
+edge_net = resnet10_pytorch(pretrained=False)
 # net = models.resnet18(pretrained=False)
 
 # transform_train = transforms.Compose([
@@ -224,24 +224,24 @@ net = resnet10_pytorch(pretrained=False)
 # else:
 #     logger.debug("Not supported model")
 
-print_total_params(net)
-net = net.to(device)
+print_total_params(edge_net)
+edge_net = edge_net.to(device)
 print(device)
 
 
 if device == 'cuda':
-    net = torch.nn.DataParallel(net) # make parallel
+    edge_net = torch.nn.DataParallel(edge_net) # make parallel
     cudnn.benchmark = True
 
 
 criterion = nn.CrossEntropyLoss()
 
 if args.opt == 'sgd':
-    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(edge_net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
     # optimizer = optim.SGD(net.parameters(), lr=args.lr)
 
 elif args.opt =='adam':
-    optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=5e-4)
+    optimizer = optim.Adam(edge_net.parameters(), lr=args.lr, weight_decay=5e-4)
 
 t1 = time.time()
 print(f"Data time: {t1 - t0} seconds")
@@ -261,7 +261,7 @@ for epoch in range(start_epoch, start_epoch + epoch):
     write_csv('results/' + args.workspace, 'acc_' +  str(args.net) + '_' + strtime + '.csv', str(acc))
     if acc > best_acc:
         logger.debug(f"Saving model...")
-        save_checkpoint(net, acc)
+        save_checkpoint(edge_net, acc)
         best_acc = acc
 logger.debug(f"The best acc is: {acc}")
 t3 = time.time()

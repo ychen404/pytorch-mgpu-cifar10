@@ -45,14 +45,14 @@ args = parser.parse_args()
 
 def train(epoch):
     print('\nEpoch: %d' % epoch)
-    net.train()
+    edge_net.train()
     train_loss = 0
     correct = 0
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        outputs = net(inputs)
+        outputs = edge_net(inputs)
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
@@ -79,15 +79,14 @@ def save_checkpoint(net, acc):
     torch.save(state, checkpoint_dir + 'checkpoint.pt')
 
 def test_acc():
-    net.eval()
+    edge_net.eval()
     test_loss = 0
     correct = 0
     total = 0
-    pdb.set_trace()
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
+            outputs = edge_net(inputs)
             logger.debug(outputs)
             loss = criterion(outputs, targets)
 
@@ -141,32 +140,32 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False,
 print('==> Building model..')
 
 if args.net == 'res4':
-    net = resnet4(num_classes=100)
+    edge_net = resnet4(num_classes=100)
 elif args.net == 'res8':
-    net = resnet8(num_classes=100)
+    edge_net = resnet8(num_classes=100)
 elif args.net == 'res6':
-    net = resnet6(num_classes=100)
+    edge_net = resnet6(num_classes=100)
 elif args.net =='res18':
-    net = resnet18(num_classes=100)
+    edge_net = resnet18(num_classes=100)
 elif args.net =='res34':
-    net = resnet34(num_classes=100)
+    edge_net = resnet34(num_classes=100)
 
 else:
     logger.debug("Not supported model")
 
 
-print_total_params(net)
-net = net.to(device)
+print_total_params(edge_net)
+edge_net = edge_net.to(device)
 if device == 'cuda':
-    net = torch.nn.DataParallel(net) # make parallel
+    edge_net = torch.nn.DataParallel(edge_net) # make parallel
     cudnn.benchmark = True
 
 criterion = nn.CrossEntropyLoss()
 
 if args.opt == 'sgd':
-    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(edge_net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 elif args.opt =='adam':
-    optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=5e-4)
+    optimizer = optim.Adam(edge_net.parameters(), lr=args.lr, weight_decay=5e-4)
 
 
 strtime = get_time()
@@ -186,6 +185,6 @@ check_dir(root)
 path = 'results/res6_2cls_100_percent_save/checkpoint/checkpoint.pt'
 checkpoint = torch.load(path)
 # pdb.set_trace()
-net.load_state_dict(checkpoint['net'])
+edge_net.load_state_dict(checkpoint['net'])
 # net.eval()
 acc = test_acc()

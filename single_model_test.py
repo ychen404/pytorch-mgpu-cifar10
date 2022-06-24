@@ -6,14 +6,12 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 from models import *
+
 import torchvision.transforms as transforms
 import torchvision
 import logging
 from utils import write_csv, get_time, progress_bar
-import sys
 import time
-import math
-import torch.nn.init as init
 import argparse
 import os
 from data_loader import extract_classes, split_train_data, get_dirichlet_loaders
@@ -39,9 +37,10 @@ start_epoch=0
 parser = argparse.ArgumentParser(description='PyTorch CIFAR100 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--bs', default=128, type=int, help='batch size')
-parser.add_argument('--epoch', default=200, type=int, help='epochs')
+parser.add_argument('--epoch', default=200, type=int, help='number of epochs')
 parser.add_argument('--net', default='res8')
 parser.add_argument('--opt', default='sgd')
+parser.add_argument('--lr_sched', default=None, help='multistep, cos')
 parser.add_argument('--workspace', default='test_workspace')
 parser.add_argument('--dataset', default='cifar100')
 parser.add_argument("--percent_classes", default=1, type=float, help="how many classes to classify")
@@ -51,14 +50,17 @@ args = parser.parse_args()
 
 def train(epoch):
     print('\nEpoch: %d' % epoch)
-    net.train()
+    edge_net.train()
     train_loss = 0
     correct = 0
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
+        if args.lr_sched == 'cos':
+            lr_scheduler.step()
+            print(f"current lr: {lr_scheduler.get_lr()}")
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        outputs = net(inputs)
+        outputs = edge_net(inputs)
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
@@ -70,7 +72,6 @@ def train(epoch):
 
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
 
     return train_loss/(batch_idx+1)
 
@@ -85,14 +86,14 @@ def save_checkpoint(net, acc):
     torch.save(state, checkpoint_dir + 'checkpoint.pt')
 
 def test_acc(epoch):
-    net.eval()
+    edge_net.eval()
     test_loss = 0
     correct = 0
     total = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
+            outputs = edge_net(inputs)
             loss = criterion(outputs, targets)
 
             test_loss += loss.item()
@@ -201,35 +202,46 @@ else:
     nc = 1000
 
 if args.net == 'res4':
-    net = resnet4(num_classes=nc)
+    edge_net = resnet4(num_classes=nc)
 elif args.net == 'res8':
-    net = resnet8(num_classes=nc)
+    edge_net = resnet8(num_classes=nc)
+elif args.net == 'res8_aka':
+    edge_net = resnet8_aka(num_classes=nc)
 elif args.net == 'res6':
-    net = resnet6(num_classes=nc)
+    edge_net = resnet6(num_classes=nc)
 elif args.net =='res18':
-    net = resnet18(num_classes=nc)
+    edge_net = resnet18(num_classes=nc)
 elif args.net =='res34':
-    net = resnet34(num_classes=nc)
+    edge_net = resnet34(num_classes=nc)
 elif args.net =='vgg19':
-    net = VGG('VGG19')
+    edge_net = VGG('VGG19')
 else:
     raise NotSupportedErr("Not supported model")
 
-print_total_params(net)
-net = net.to(device)
+print_total_params(edge_net)
+edge_net = edge_net.to(device)
 if device == 'cuda':
-    net = torch.nn.DataParallel(net) # make parallel
+    edge_net = torch.nn.DataParallel(edge_net) # make parallel
     cudnn.benchmark = True
 
 criterion = nn.CrossEntropyLoss()
 
 if args.opt == 'sgd':
-    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
-    # optimizer = optim.SGD(net.parameters(), lr=args.lr)
+    # optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(edge_net.parameters(), lr=args.lr)
 
 elif args.opt =='adam':
-    optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=5e-4)
+    optimizer = optim.Adam(edge_net.parameters(), lr=args.lr, weight_decay=5e-4)
 
+if args.lr_sched == 'multistep':
+    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+                                                            milestones=[100, 150])
+if args.lr_sched == None:
+    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+                                                            milestones=[65533])
+elif args.lr_sched == 'cos':
+    lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epoch, eta_min=0)
+    # exit()
 t1 = time.time()
 print(f"Data time: {t1 - t0} seconds")
 t2 = time.time()
@@ -240,13 +252,17 @@ check_dir(root)
 
 best_acc = 0
 for epoch in range(args.epoch):
+    print('current epoch {}, current lr {:.5e}'.format(epoch, optimizer.param_groups[0]['lr']))
     trainloss = train(epoch)
+    
+    if args.lr_sched == 'multistep':
+        lr_scheduler.step()
     acc = test_acc(epoch)
     logger.debug(f"The result is: {acc}")
     write_csv('results/' + args.workspace, 'acc_' +  str(args.net) + '_' + strtime + '.csv', str(acc))
     if acc > best_acc:
         logger.debug(f"Saving model...")
-        save_checkpoint(net, acc)
+        save_checkpoint(edge_net, acc)
         best_acc = acc
 logger.debug(f"The best acc is: {acc}")
 t3 = time.time()

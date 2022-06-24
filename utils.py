@@ -287,9 +287,12 @@ def build_model_from_name(name, num_classes, device):
     elif name == 'res8':
         net = resnet8(num_classes=num_classes)
 
+    elif name == 'res8_aka':
+        net = resnet8_aka(num_classes=num_classes)
+
     elif name == 'res8_emb':
         net = resnet8(num_classes=num_classes, emb=True)    
-
+        
     elif name == 'res50':
         net = resnet50(num_classes=num_classes)
 
