@@ -1,5 +1,8 @@
 {
     "python.pythonPath": "/usr/bin/python3",
+    "files.exclude": {
+        "**/*.csv": true
+    },
     // "files.exclude": {
     //     "**/*.csv": true
     // }

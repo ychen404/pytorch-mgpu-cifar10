@@ -380,8 +380,8 @@ if __name__ == "__main__":
 
     best_acc = 0
     cifar100_loader = get_cifar100_loader(args)
-    for epoch in range(args.epoch):
-        print('current epoch {}, current lr {:.5e}'.format(epoch, cloud_optimizer.param_groups[0]['lr']))
+    for epoch in range(args.cloud_epoch):
+        print('current epoch {}, current lr {:.9e}'.format(epoch, cloud_optimizer.param_groups[0]['lr']))
         trainloss = distill(epoch=epoch, 
                             edge_net=edge_net, 
                             cloud_net=cloud_net, 

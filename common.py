@@ -12,6 +12,7 @@ from utils import get_time, write_csv, freeze_net
 import argparse
 import pdb
 from utils import save_json
+from torch.utils.tensorboard import SummaryWriter
 
 
 logger = logging.getLogger('__name__')
@@ -562,6 +563,11 @@ def run_distill(
         write_csv('results/' + args.workspace, prefix + '.csv', str(acc))
         write_csv('results/' + args.workspace, prefix + '_loss' + '.csv', str(test_loss))
 
+        root = 'results/' + args.workspace
+
+        writer = SummaryWriter(log_dir=root, comment=args.workspace)
+        writer.add_scalar('Accuracy/test', acc, epoch)
+        writer.add_scalar('Loss/test', test_loss, epoch)
         
         # Debug confidence
         # Now the distill function returns [trainloss, confidence_results]

@@ -19,6 +19,7 @@ from Fed import FedAvg
 
 from common import *
 
+
 logger = logging.getLogger('__name__')
 logger.setLevel('INFO')
 
@@ -286,8 +287,11 @@ if __name__ == "__main__":
             
             ########### Calculate accuracy ###########            
             criterion_edge = nn.CrossEntropyLoss()
-            acc, best_acc = test(round, args, cloud_net, criterion_edge, testloader_cloud, device, 'fedavg')
+            acc, best_acc, test_loss = test(round, args, cloud_net, criterion_edge, testloader_cloud, device, 'fedavg')
             logger.info(f"The fedavg accuracy is: {acc}")
+            
             csv_name = 'acc_fedavg'  + '.csv'
+            loss_file = 'fedavg_loss' + '.csv'
             path = 'results/' + args.workspace
             write_csv(path, csv_name, str(acc))
+            write_csv(path, loss_file, str(test_loss))

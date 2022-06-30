@@ -17,6 +17,7 @@ import os
 from data_loader import extract_classes, split_train_data, get_dirichlet_loaders
 import time
 from imagenetLoad import ImageNetDownSample
+from torch.utils.tensorboard import SummaryWriter
 
 
 logger = logging.getLogger(__name__)
@@ -250,14 +251,22 @@ strtime = get_time()
 root = 'results/' + args.workspace
 check_dir(root)
 
+writer = SummaryWriter(log_dir=root)
+
 best_acc = 0
 for epoch in range(args.epoch):
     print('current epoch {}, current lr {:.5e}'.format(epoch, optimizer.param_groups[0]['lr']))
     trainloss = train(epoch)
+    writer.add_scalar('Loss/train', trainloss, epoch)
+    # writer.add_scalar('Loss/test', np.random.random(), n_iter)
+    # writer.add_scalar('Accuracy/train', np.random.random(), n_iter)
+
     
     if args.lr_sched == 'multistep':
         lr_scheduler.step()
     acc = test_acc(epoch)
+    writer.add_scalar('Accuracy/test', acc, epoch)
+
     logger.debug(f"The result is: {acc}")
     write_csv('results/' + args.workspace, 'acc_' +  str(args.net) + '_' + strtime + '.csv', str(acc))
     if acc > best_acc:

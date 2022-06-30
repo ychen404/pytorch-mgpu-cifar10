@@ -42,7 +42,7 @@ def plot(y_axis, xlabel=None, ylabel=None, title=None, set_color='r', output='re
 
     # Scale elements
     # sns.set_context("paper")
-    sns.set_context("notebook", font_scale=1.4, rc={"lines.linewidth": 3})
+    sns.set_context("notebook", font_scale=1.4, rc={"lines.linewidth": 2})
     
     fig, ax = plt.subplots()
     ax.set(xlabel=xlabel, ylabel=ylabel, title=title)
@@ -83,15 +83,23 @@ if __name__ == "__main__":
     
     
     data_to_plot = {}
-    fedavg_3worker_alpha_100 = 'results/emb_diri_dlc_10cls_fedavg_alpha_100/acc_fedavg.csv'
-    fedavg_3worker_alpha_1 = 'results/emb_diri_dlc_10cls_fedavg_alpha_1/acc_fedavg.csv'
-    fedavg_3worker_alpha_001 = 'results/emb_diri_dlc_10cls_fedavg_alpha_0.01/acc_fedavg.csv'
+    # fedavg_3worker_alpha_100 = 'results/emb_diri_dlc_10cls_fedavg_alpha_100/acc_fedavg.csv'
+    # fedavg_3worker_alpha_1 = 'results/emb_diri_dlc_10cls_fedavg_alpha_1/acc_fedavg.csv'
+    # fedavg_3worker_alpha_001 = 'results/emb_diri_dlc_10cls_fedavg_alpha_0.01/acc_fedavg.csv'
 
+    # feddf_alpha_100 = 'results/emb_diri_feddf_r_100_e_10_c_3_10cls_alpha_100_5workers/distill.csv'
+    ours_alpha_001 = 'results/emb_diri_wavg_new_homo_r_100_e_10_c_30_10cls_alpha_0.01_5workers/distill.csv'
+    ours_alpha_001_loss = 'results/emb_diri_wavg_new_homo_r_100_e_10_c_30_10cls_alpha_0.01_5workers/distill_loss.csv'
+    ours_alpha_100 = 'results/emb_diri_wavg_new_homo_r_100_e_10_c_10_10cls_alpha_100_5workers/distill.csv'
 
     ########## previous non iid case 
-    data_to_plot['FedAvg (res6, alpha=100, 3 edge workers)'] = collect_data(fedavg_3worker_alpha_100)
-    data_to_plot['FedAvg (res6, alpha=1, 3 edge workers)'] = collect_data(fedavg_3worker_alpha_1)
-    data_to_plot['FedAvg (res6, alpha=0.01, 3 edge workers)'] = collect_data(fedavg_3worker_alpha_001)
+    # data_to_plot['FedDF'] = collect_data(feddf_alpha_100)
+    # data_to_plot['{}'] = collect_data(ours_alpha_001)
+    data_to_plot['10 distillation epochs'] = collect_data(ours_alpha_100)
 
+    # data_to_plot['FedAvg (res6, alpha=1, 3 edge workers)'] = collect_data(fedavg_3worker_alpha_1)
+    # data_to_plot['FedAvg (res6, alpha=0.01, 3 edge workers)'] = collect_data(fedavg_3worker_alpha_001)
 
-    plot(data_to_plot, 'Round', 'Top-1 test accuracy', '', output= 'results/emb_diri_dlc_10cls_fedavg_alpha_100/'  + 'result.png')
+    # plot(data_to_plot, 'Round', 'Top-1 test accuracy', '', output= 'results/emb_diri_feddf_r_100_e_10_c_3_10cls_alpha_100_5workers/'  + 'result.png')
+    # plot(data_to_plot, 'Epochs', 'Top-1 test accuracy', '', output= 'results/emb_diri_wavg_new_homo_r_100_e_10_c_30_10cls_alpha_0.01_5workers/'  + 'result.png')
+    plot(data_to_plot, 'Epochs', 'Top-1 test accuracy', '', output= 'results/emb_diri_wavg_new_homo_r_100_e_10_c_10_10cls_alpha_100_5workers/'  + 'result.png')
