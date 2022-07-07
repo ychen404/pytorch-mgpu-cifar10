@@ -63,6 +63,7 @@ def parse_arguments():
     parser.add_argument('--distill_percent', default=1, type=float, help='percentage of public data use for distillation')
     parser.add_argument('--vary_epoch', action='store_true', help="change the number of local epochs of edges")
     parser.add_argument('--save_confidence', action='store_true', help="save all the norm values for debug purpose")
+    parser.add_argument('--reduce_cloud_data', action='store_true', help="Use 10 percent cloud data to distill")
 
     ######################### Aggregation Parameters #########################
     parser.add_argument('--selection', action='store_true', help="enable selection method")
@@ -178,8 +179,15 @@ if __name__ == "__main__":
                 
                 # trainloader_cloud = get_subclasses_loaders(trainset_public, n_clients=1, client_classes=client_classes, num_workers=4, non_overlapped=True, seed=100)
                 # Simplify the loader since 
-                trainloader_cloud = get_loader(trainset_public, args)
-            
+                # pdb.set_trace()
+                
+                if args.reduce_cloud_data:
+                    distill_data, rest_data = torch.utils.data.random_split(trainset_public, [int(0.1 * len(trainset_public)), int(0.9 * len(trainset_public))]) # Follow FedDf paper to use 10% data to distill
+                    trainloader_cloud = get_loader(distill_data, args)
+                
+                else:
+                    trainloader_cloud = get_loader(trainset_public, args)
+
             # Use private data to perform distillation       
             else:
                 trainloaders = get_subclasses_loaders(trainset, args.num_workers, client_classes, num_workers=4, non_overlapped=True, seed=100)
@@ -231,7 +239,14 @@ if __name__ == "__main__":
         for i in range(args.num_workers):
             nets[i] = load_edge_checkpoint_fullpath(nets[i], ckpt_paths[i])
 
+
+    root = 'results/' + args.workspace
+    per_round_writer = SummaryWriter(log_dir=root + '/per_round', filename_suffix='.per_round')
+    writer = SummaryWriter(log_dir=root + '/per_epoch')
+
+    
     for round in range(args.num_rounds):
+
         logger.info(f"############# round {round} #############")
         nets = check_model_trainable(nets)
         for i in range(args.num_workers):
@@ -258,18 +273,18 @@ if __name__ == "__main__":
             run_train(nets[i], round, args, trainloaders[i], testloader_cloud, testloaders[i], i, device, False, 'local', 'edge_' + str(i))
 
         if args.aggregation_mode == 'distillation': 
-
-            # Get the public data with the specified classes
-            
-            run_distill(nets, 
-                        cloud_net, 
-                        args, 
-                        trainloader_cloud, 
-                        testloader_cloud, 
-                        worker_num=0, 
-                        device=device,
-                        selection=args.selection, 
-                        prefix='distill')
+            # acc here is the best acc of the cloud epochs
+            acc, test_loss = run_distill(round, 
+                                        nets, 
+                                        cloud_net, 
+                                        args, 
+                                        writer,
+                                        trainloader_cloud, 
+                                        testloader_cloud, 
+                                        worker_num=0, 
+                                        device=device,
+                                        selection=args.selection, 
+                                        prefix='distill')
         
         elif args.aggregation_mode == 'fedavg':
             
@@ -295,3 +310,6 @@ if __name__ == "__main__":
             path = 'results/' + args.workspace
             write_csv(path, csv_name, str(acc))
             write_csv(path, loss_file, str(test_loss))
+
+        per_round_writer.add_scalar('Accuracy/test', acc, round)
+        per_round_writer.add_scalar('Loss/test', test_loss, round)

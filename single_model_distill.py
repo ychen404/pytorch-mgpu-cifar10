@@ -153,38 +153,48 @@ def distill(
         raise NotImplementedError("Not supported dataset")
     
     for batch_idx, (inputs, targets) in enumerate(distill_loader):       
-        inputs, targets = inputs.to(device), targets.to(device)
+        inputs, targets = inputs.to(device, non_blocking=True), targets.to(device, non_blocking=True)
 
         # if batch_idx % 10 == 0:
         #     logger.debug(f"Processing batch {batch_idx}")
 
         
         optimizer.zero_grad()
+        
+        t1 = time.time()
         out_s = cloud_net(inputs)
-
-
         size_curr_batch = out_s.shape[0]
         s_max = F.log_softmax(out_s / T, dim=1)
-
+        t2 = time.time()
+        if profile:
+            print(f"Cloud inference time: {t2 - t1} seconds")
 
         # Use torch.zeros(128,100) to create the placeholder
-        out_t = torch.zeros((size_curr_batch, total_classes), device=device)
-        t_max = torch.zeros((size_curr_batch, total_classes), device=device)
-                 
-        out_t += edge_net(inputs)        
-        t_max += F.softmax(out_t / T, dim=1)
+        # out_t = torch.zeros((size_curr_batch, total_classes), device=device)
+        # t_max = torch.zeros((size_curr_batch, total_classes), device=device)
+
+        t1 = time.time()
+        out_t = edge_net(inputs)        
+        t_max = F.softmax(out_t / T, dim=1)
         # t_max = t_max / num_workers
-        
+        t2 = time.time()
         loss_kd = kd_fun(s_max, t_max) / size_curr_batch
         # loss = loss_fun(out_s, targets)
         
         # loss_kd = (1 - lambda_) * loss + lambda_ * T * T * loss_kd
 
         loss_kd = lambda_ * T * T * loss_kd
+        if profile:
+            print(f"Edge inference time: {t2 - t1} seconds")
 
-
+        t1 = time.time()
         loss_kd.backward()
         optimizer.step()
+        t2 = time.time()
+        
+        if profile:
+            print(f"Optimizer step time: {t2 - t1} seconds")
+
 
         if lr_sched == 'cos':
             lr_scheduler.step()
@@ -216,7 +226,7 @@ def get_cifar100_loader(args):
         ])
 
     dataset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
-    cifar100_loader = torch.utils.data.DataLoader(dataset, batch_size=args.bs, shuffle=True, num_workers=4)
+    cifar100_loader = torch.utils.data.DataLoader(dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
 
     return cifar100_loader
 
@@ -265,7 +275,7 @@ if __name__ == "__main__":
         if args.percent_data != 1:
             trainset, part_b = split_train_data(trainset, args.percent_data)
         
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True, num_workers=4)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
 
         testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
         classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
@@ -298,9 +308,9 @@ if __name__ == "__main__":
             trainloader = trainloaders[0]
 
         else:
-            trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True, num_workers=4)
+            trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
 
-    testloader = torch.utils.data.DataLoader(testset, batch_size=args.bs, shuffle=False, num_workers=4)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
 
     print('==> Building model..')
 
@@ -368,8 +378,11 @@ if __name__ == "__main__":
     elif args.lr_sched == 'cos':
         lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epoch, eta_min=0)
 
+    profile = False
     t1 = time.time()
-    print(f"Data time: {t1 - t0} seconds")
+
+    if profile:
+        print(f"Data time: {t1 - t0} seconds")
     t2 = time.time()
 
     strtime = get_time()
@@ -403,4 +416,5 @@ if __name__ == "__main__":
             best_acc = acc
     logger.debug(f"The best acc is: {acc}")
     t3 = time.time()
-    print(f"Training time: {t3 - t2} seconds")
+    if profile:
+        print(f"Training time: {t3 - t2} seconds")

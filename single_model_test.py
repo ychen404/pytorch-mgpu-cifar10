@@ -93,7 +93,7 @@ def test_acc(epoch):
     total = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
-            inputs, targets = inputs.to(device), targets.to(device)
+            inputs, targets = inputs.to(device, non_blocking=True), targets.to(device, non_blocking=True)
             outputs = edge_net(inputs)
             loss = criterion(outputs, targets)
 
@@ -154,7 +154,7 @@ elif args.dataset == "cifar10":
     if args.percent_data != 1:
         trainset, part_b = split_train_data(trainset, args.percent_data)
     
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True, num_workers=4)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True, num_workers=1, pin_memory=True)
 
     testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
@@ -187,9 +187,9 @@ if args.percent_classes != 1:
         trainloader = trainloaders[0]
 
     else:
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True, num_workers=4)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True, num_workers=1, pin_memory=True)
 
-testloader = torch.utils.data.DataLoader(testset, batch_size=args.bs, shuffle=False, num_workers=4)
+testloader = torch.utils.data.DataLoader(testset, batch_size=args.bs, shuffle=False, num_workers=1, pin_memory=True)
 
 print('==> Building model..')
 

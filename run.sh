@@ -486,19 +486,44 @@
 #                 --aggregation_mode distillation \
 #                 --public_percent 0.5
 
+
+# split=1
+# CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
+#                 --workspace emb_diri_wavg_adam_test_batch_r_100_e_10_c_3_10cls_alpha_100_5workers \
+#                 --net res6_emb \
+#                 --cloud res6 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 100 \
+#                 --dataset cifar10 \
+#                 --num_workers 5 \
+#                 --num_rounds 100 \
+#                 --epoch 10 \
+#                 --cloud_epoch 3 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --emb_mode wavg \
+#                 --aggregation_mode distillation \
+#                 --public_percent 0.5
+
 split=1
-CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
-                --workspace emb_diri_wavg_r_100_e_40_c_3_10cls_alpha_1_5workers \
+CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
+                --workspace debug \
                 --net res6_emb \
                 --cloud res6 \
                 --split $split \
                 --split_classes \
                 --partition_mode dirichlet \
-                --alpha 1 \
+                --alpha 100 \
                 --dataset cifar10 \
                 --num_workers 5 \
                 --num_rounds 100 \
-                --epoch 40 \
+                --epoch 1 \
                 --cloud_epoch 3 \
                 --optimizer adam \
                 --cloud_lr 0.001 \
@@ -509,6 +534,59 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
                 --emb_mode wavg \
                 --aggregation_mode distillation \
                 --public_percent 0.5
+
+
+
+
+##### Reduce cloud data
+# split=1
+# CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
+#                 --workspace emb_diri_wavg_reduce_cloud_data_adam_r_100_e_40_c_3_10cls_alpha_0.01_5workers \
+#                 --net res6_emb \
+#                 --cloud res6 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 0.01 \
+#                 --dataset cifar10 \
+#                 --num_workers 5 \
+#                 --num_rounds 100 \
+#                 --epoch 40 \
+#                 --cloud_epoch 3 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --reduce_cloud_data \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --emb_mode wavg \
+#                 --aggregation_mode distillation \
+#                 --public_percent 0.5
+
+# split=1
+# CUDA_VISIBLE_DEVICES=3 python3 train_cifar.py \
+#                 --workspace emb_diri_wavg_speedtest_5workers \
+#                 --net res6_emb \
+#                 --cloud res6 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 0.1 \
+#                 --dataset cifar10 \
+#                 --num_workers 5 \
+#                 --num_rounds 100 \
+#                 --epoch 1 \
+#                 --cloud_epoch 3 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --emb_mode wavg \
+#                 --aggregation_mode distillation \
+#                 --public_percent 0.5
 
 # #### No decay
 # split=1
@@ -525,6 +603,31 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
 #                 --num_rounds 100 \
 #                 --epoch 100 \
 #                 --cloud_epoch 3 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --no_decay \
+#                 --emb_mode wavg \
+#                 --aggregation_mode distillation \
+#                 --public_percent 0.5
+
+# split=1
+# CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
+#                 --workspace debug \
+#                 --net res6_emb \
+#                 --cloud res6 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 0.01 \
+#                 --dataset cifar10 \
+#                 --num_workers 3 \
+#                 --num_rounds 100 \
+#                 --epoch 1 \
+#                 --cloud_epoch 1 \
 #                 --optimizer adam \
 #                 --cloud_lr 0.001 \
 #                 --lr 0.1 \
@@ -767,6 +870,34 @@ CUDA_VISIBLE_DEVICES=1 python3 train_cifar.py \
 #                 --num_drop 0 \
 #                 --aggregation_mode distillation \
 #                 --public_percent 0.5
+
+###### reduce distill data
+# split=1
+# CUDA_VISIBLE_DEVICES=2 python3 train_cifar.py \
+#                 --workspace emb_diri_feddf_reduce_distill_data_r_100_e_100_c_1_10cls_alpha_0.01_5workers \
+#                 --net res6_emb \
+#                 --cloud res6 \
+#                 --split $split \
+#                 --split_classes \
+#                 --partition_mode dirichlet \
+#                 --alpha 0.01 \
+#                 --dataset cifar10 \
+#                 --num_workers 5 \
+#                 --num_rounds 100 \
+#                 --epoch 100 \
+#                 --cloud_epoch 1 \
+#                 --optimizer adam \
+#                 --cloud_lr 0.001 \
+#                 --lr 0.1 \
+#                 --lamb 1 \
+#                 --temp 1 \
+#                 --public_distill \
+#                 --reduce_cloud_data \
+#                 --emb_mode dlc \
+#                 --num_drop 0 \
+#                 --aggregation_mode distillation \
+#                 --public_percent 0.5
+
 
 # 50 local epochs, one-shot
 # split=1

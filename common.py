@@ -1,4 +1,5 @@
 import logging
+from xml.dom import NotSupportedErr
 import torch
 from utils import progress_bar
 import os
@@ -13,6 +14,7 @@ import argparse
 import pdb
 from utils import save_json
 from torch.utils.tensorboard import SummaryWriter
+import time
 
 
 logger = logging.getLogger('__name__')
@@ -188,25 +190,38 @@ def distill(
     logger.debug('\nEpoch: %d' % epoch)
 
     def return_edge_norm(edge_out, emb):
-
-        nLab = total_classes
-        batchProbs = F.softmax(edge_out, dim=1).data.cpu().numpy()
-        maxInds = np.argmax(batchProbs,1)
-        size = 1
         
-        embedding = np.zeros([size, embDim * nLab])
-        idxs = np.arange(size)
-        for j in range(size):
+        # pdb.set_trace()
+        nLab = total_classes
+
+        emb = emb.data.cpu().numpy()
+        batchProbs = F.softmax(edge_out, dim=1).data.cpu().numpy()
+        # batchProbs = F.softmax(edge_out, dim=1)
+        
+        maxInds = np.argmax(batchProbs,1)
+        # maxInds = torch.argmax(batchProbs,1)
+
+        batch_size = edge_out.shape[0]
+        embedding = np.zeros([batch_size, embDim * nLab])
+        # embedding = torch.zeros([size, embDim * nLab], device=device)
+
+        idxs = np.arange(batch_size)
+        # idxs = torch.arange(batch_size)
+
+        for j in range(batch_size):
             for c in range(nLab):
                 if c == maxInds[j]:
                     embedding[idxs[j]][embDim * c : embDim * (c+1)] = deepcopy(emb[j]) * (1 - batchProbs[j][c])
                 else:
                     embedding[idxs[j]][embDim * c : embDim * (c+1)] = deepcopy(emb[j]) * (-1 * batchProbs[j][c])
 
+
         emb_norm = np.linalg.norm(embedding, 2)
+        # emb_norm = torch.linalg.norm(embedding, 2, dim=1) 
+
+        # why torch version is not working for non-batch mode??
         return emb_norm
     
-
 
     if lr_sched == 'multistep':
         lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
@@ -323,121 +338,172 @@ def distill(
                 temp_res = torch.empty((num_left_edge, total_classes), device=device)
 
             emb_flag = False
-            
+            batch_mode = True
+
             # TODO: Need to add a method to distinguish with other
             if emb_mode == 'dlc' or emb_mode == 'wavg' or emb_mode == 'fedet':
                 emb_flag = True
-                for idx, (input, target) in enumerate(zip(inputs, targets)):
-                    input = input.unsqueeze(0)
-                    
-                    current_batch_confidence = []
-                    # Save the true label to the confidence output
-                    if save_confidence:
-                                # confidence_results[idx].append(target.item())
-                                # confidence_results[cidx].append(target.item())
-                                current_batch_confidence.append(target.item())
+                if batch_mode: 
 
-                    
+                    # Batch mode
+                    sum_norm = torch.zeros([len(inputs)], device=device)
+                    all_output = [[] for _ in range(len(edge_nets))]
+                    temp_res = torch.empty((len(edge_nets), total_classes), device=device)    
+
+                    t1 = time.time()
                     for i, edge_net in enumerate(edge_nets):
-                        # TODO: use the emb model as only case to simplify
-                        if hasattr(edge_net, 'emb') and edge_net.emb:
                         
-                            edge_out, emb = edge_net(input)
-                            embDim = edge_net.get_embedding_dim()
-                            emb = emb.data.cpu().numpy()
+                        # t3 = time.time()
+                        edge_out, emb = edge_net(inputs)
+                        # t4 = time.time()
+                        # print(f"Edge inference time: {t4 - t3}")
 
-                            if emb_mode == 'fedet':
-                                # Save the softmax output from each image
-                                # pdb.set_trace()
-                                
-                                edge_softmax = F.softmax(edge_out, dim=1)                               
-                                softmax_var = torch.var(edge_softmax)
-                                save_all_output[idx].append((softmax_var.item(), edge_softmax))
-                                # pdb.set_trace()
-                                
-                            if emb_mode == 'dlc' or emb_mode == 'wavg':
-                     
-                                emb_norm = return_edge_norm(edge_out, emb)
-                                save_all_output[idx].append((emb_norm, edge_out))
+                        # t3 = time.time()
+                        embDim = edge_net.get_embedding_dim()
+                        # t4 = time.time()
+                        # print(f"Get embedding_dim: {t4 - t3}")
 
-                                if save_confidence:
-                                    # confidence_results[cidx].append(emb_norm)
-                                    current_batch_confidence.append(emb_norm)
-            
-                                #edge_predicted = edge_out.max(1)
-                                # No need to check this. 
-                                # This is already done before. 
-                                """
-                                edge_predicted is a tensor consists of the value and the index:
-                                torch.return_types.max(
-                                values=tensor([6.3136], device='cuda:0'),
-                                indices=tensor([8], device='cuda:0'))
-                                
-                                target is a tensor with the index: tensor(8, device='cuda:0')
-                                
-                                In order to compare them, we need to index twice on the edge_predicted
-                                edge_predicted[1] -> (tensor([8], device='cuda:0')
-                                edge_predicted[1][0] -> (tensor(8, device='cuda:0'))
-                                """
-                    # cidx += 1
-                    # pdb.set_trace()
-
-                    confidence_results.append(current_batch_confidence)
-                    batch_output = save_all_output[idx] # save the outputs from a batch
-
-                    if emb_mode == 'wavg': # weighted average of all edge
-                        sum_norm = sum(e[0] for e in batch_output)
-                        for i, e in enumerate(batch_output):
-                            # Low norm value has a higher weight
-                            temp_res[i] = ((sum_norm - e[0]) / sum_norm) * e[1]
-
-                    elif emb_mode == 'dlc': # dropping some edge workers
-                        batch_output.sort(key = lambda x : x[0]) # use the emb_norm to sort
+                        # emb_norm size: tensor([128]), 128 is the batch size
                         
-                        # when num_drop == 0, this case is the same as FedDF
-                        if num_drop == 0:
-                            for i, e in enumerate(batch_output):
-                                temp_res[i] = e[1] # the 1st idx in e is the model output
-                        else:
-                            for i, e in enumerate(batch_output[:-num_drop]):
-                                # Large norm means low confidence
-                                # Drop the last worker with the largest norm
-                                temp_res[i] = e[1] # the 1st idx in e is the model output
+                        # t3 = time.time()
+                        emb_norm = return_edge_norm(edge_out, emb)
+                        # t4 = time.time()
+                        # print(f"Return edge norm: {t4 - t3}")
+
+                        sum_norm += emb_norm
+                        all_output[i] = (emb_norm, edge_out)
+                        
+                    # t2 = time.time()
+                    # print(f"Total Edge inference time: {t2 - t1}")
+                    # t1 = time.time()
+                    # for i, edge_net in enumerate(edge_nets):
+                    for i, e in enumerate(all_output):
+                        # Low norm value has a higher weight
+                        # sum_norm.shape: [128]
+                        # e[1].shape: [128, 10]
+                        # we want to reshape sum_norm to [128, 1] so that it can perform element-wise multiplicaiton with e[1]                        
+                        weight = ((sum_norm - e[0]) / sum_norm).reshape(sum_norm.shape[0],1)
+                        # out_t.reshape(sum_norm.shape[0],1)
+                        out_t += weight * e[1]
+                    # t2 = time.time()
+                    # print(f"Edge calculate weight: {t2 - t1}")
+                else:
                     
-                    elif emb_mode == 'fedet':
-                        # pdb.set_trace()
-                        # Higher the variance, higher confidence
-                        model_prediction = [] # use to calculate concesus
-                        consensus = 0
+                    # Non-batch mode
+
+                    for idx, (input, target) in enumerate(zip(inputs, targets)):
+                        input = input.unsqueeze(0)
                         
-                        sum_var = sum(e[0] for e in batch_output)
-                        for i, e in enumerate(batch_output):
-                            temp_res[i] = (e[0] / sum_var) * e[1]
-                            model_prediction.append(e[1].max(1)[1].item()) # append the top1 prediction
-                        
-                        np_prediction = np.array(model_prediction)
-                        consensus = np.bincount(np_prediction).argmax()
-                        
-                        for i, e in enumerate(batch_output):
-                            if model_prediction[i] != consensus:
-                                temp_res_minor[i] = (e[0] / sum_var) * e[1]
+                        current_batch_confidence = []
+                        # Save the true label to the confidence output
+                        if save_confidence:
+                                    # confidence_results[idx].append(target.item())
+                                    # confidence_results[cidx].append(target.item())
+                                    current_batch_confidence.append(target.item())
+
+                        for i, edge_net in enumerate(edge_nets):
+                            # TODO: use the emb model as only case to simplify
+                            if hasattr(edge_net, 'emb') and edge_net.emb:
                             
-                    else:
-                        raise NotImplementedError("Not supported emb mode")
+                                edge_out, emb = edge_net(input)
+                                embDim = edge_net.get_embedding_dim()
+                                # emb = emb.data.cpu().numpy()
+
+                                if emb_mode == 'fedet':
+                                    # Save the softmax output from each image
+                                    # pdb.set_trace()
+                                    
+                                    edge_softmax = F.softmax(edge_out, dim=1)                               
+                                    softmax_var = torch.var(edge_softmax)
+                                    save_all_output[idx].append((softmax_var.item(), edge_softmax))
+                                    # pdb.set_trace()
+                                    
+                                if emb_mode == 'dlc' or emb_mode == 'wavg':
+                                    # emb = emb.data.cpu().numpy()
+
+                                    emb_norm = return_edge_norm(edge_out, emb)
+                                    save_all_output[idx].append((emb_norm, edge_out))
+
+                                    if save_confidence:
+                                        # confidence_results[cidx].append(emb_norm)
+                                        current_batch_confidence.append(emb_norm)
+                
+                                    #edge_predicted = edge_out.max(1)
+                                    # No need to check this. 
+                                    # This is already done before. 
+                                    """
+                                    edge_predicted is a tensor consists of the value and the index:
+                                    torch.return_types.max(
+                                    values=tensor([6.3136], device='cuda:0'),
+                                    indices=tensor([8], device='cuda:0'))
+                                    
+                                    target is a tensor with the index: tensor(8, device='cuda:0')
+                                    
+                                    In order to compare them, we need to index twice on the edge_predicted
+                                    edge_predicted[1] -> (tensor([8], device='cuda:0')
+                                    edge_predicted[1][0] -> (tensor(8, device='cuda:0'))
+                                    """
+                        # cidx += 1
+                        # pdb.set_trace()
+
+                        confidence_results.append(current_batch_confidence)
+                        batch_output = save_all_output[idx] # save the outputs from a batch
+
+                        if emb_mode == 'wavg': # weighted average of all edge
+                            sum_norm = sum(e[0] for e in batch_output)
+                            for i, e in enumerate(batch_output):
+                                # Low norm value has a higher weight
+                                temp_res[i] = ((sum_norm - e[0]) / sum_norm) * e[1]
+
+                        elif emb_mode == 'dlc': # dropping some edge workers
+                            batch_output.sort(key = lambda x : x[0]) # use the emb_norm to sort
+                            
+                            # when num_drop == 0, this case is the same as FedDF
+                            if num_drop == 0:
+                                for i, e in enumerate(batch_output):
+                                    temp_res[i] = e[1] # the 1st idx in e is the model output
+                            else:
+                                for i, e in enumerate(batch_output[:-num_drop]):
+                                    # Large norm means low confidence
+                                    # Drop the last worker with the largest norm
+                                    temp_res[i] = e[1] # the 1st idx in e is the model output
                         
-                    # Calculate the average of the output of each sample
-                    # Each output is torch.size([1,10])
-                    # Use dim=0, the size of the mean is torch.size([10]), use keepdim to maintain the torch.size([1, 10])
-                    out_t_temp.append(temp_res.mean(dim=0, keepdim=True))
+                        elif emb_mode == 'fedet':
+                            # pdb.set_trace()
+                            # Higher the variance, higher confidence
+                            model_prediction = [] # use to calculate concesus
+                            consensus = 0
+                            
+                            sum_var = sum(e[0] for e in batch_output)
+                            for i, e in enumerate(batch_output):
+                                temp_res[i] = (e[0] / sum_var) * e[1]
+                                model_prediction.append(e[1].max(1)[1].item()) # append the top1 prediction
+                            
+                            np_prediction = np.array(model_prediction)
+                            consensus = np.bincount(np_prediction).argmax()
+                            
+                            for i, e in enumerate(batch_output):
+                                if model_prediction[i] != consensus:
+                                    temp_res_minor[i] = (e[0] / sum_var) * e[1]
+                                
+                        else:
+                            raise NotImplementedError("Not supported emb mode")
+                            
+                        # Calculate the average of the output of each sample
+                        # Each output is torch.size([1,10])
+                        # Use dim=0, the size of the mean is torch.size([10]), use keepdim to maintain the torch.size([1, 10])
+                
+                        out_t_temp.append(temp_res.mean(dim=0, keepdim=True))
+
+                        if emb_mode == 'fedet':
+                            out_t_minor_temp.append(temp_res_minor.mean(dim=0, keepdim=True))
+
+                    out_t = torch.cat(out_t_temp, dim=0) # use dim 0 to stack the tensors
 
                     if emb_mode == 'fedet':
-                        out_t_minor_temp.append(temp_res_minor.mean(dim=0, keepdim=True))
-            
-                out_t = torch.cat(out_t_temp, dim=0) # use dim 0 to stack the tensors
+                        out_t_minor = torch.cat(out_t_minor_temp, dim=0)
+                
 
-                if emb_mode == 'fedet':
-                    out_t_minor = torch.cat(out_t_minor_temp, dim=0)
-            
             #### Calculate model outputs from all edge models without dropping
             else:
                 for i, edge_net in enumerate(edge_nets):
@@ -476,15 +542,17 @@ def distill(
         else:
             loss_kd = (1 - lambda_) * loss + lambda_ * T * T * loss_kd
 
+        # t1 = time.time()
         loss_kd.backward()
         optimizer.step()
-
+        # t2 = time.time()
+        # print(f"Opt step time: {t2 - t1}")
+        
         if lr_sched == 'cos':
             lr_scheduler.step()
             # print(f"current lr: {lr_scheduler.get_lr()}")
         
-        train_loss += loss_kd.item()
-        
+        train_loss += loss_kd.item()        
         # We do not use the true labels to distill
         # But we can still use them to check the training accuracy for debug purpose
         # The bar is not accumulating the images
@@ -504,9 +572,11 @@ def distill(
         return train_loss/(batch_idx+1)
 
 def run_distill(
-    edge_nets,  
+    curr_round, # use for tensorboard
+    edge_nets,
     cloud, 
-    args, 
+    args,
+    writer,
     trainloader_cloud, 
     testloader_cloud,
     worker_num, 
@@ -527,13 +597,16 @@ def run_distill(
 
     if args.optimizer == 'sgd':
         optimizer = optim.SGD(cloud.parameters(), lr=args.cloud_lr, momentum=0.9, weight_decay=5e-4)
-    else:
-        logger.debug("Using adam optimizer")
+    elif args.optimizer == 'adam':
+        logger.info("Using adam optimizer")
         optimizer = optim.Adam(cloud.parameters(), lr=args.cloud_lr, weight_decay=5e-4)
+    else:
+        raise NotImplementedError("Not implemented optimizer")
 
     for epoch in range(args.cloud_epoch):
         
         # TODO: merge selection into average method
+
         res = distill(epoch,
                     frozen_edge_nets,
                     cloud, 
@@ -563,26 +636,23 @@ def run_distill(
         write_csv('results/' + args.workspace, prefix + '.csv', str(acc))
         write_csv('results/' + args.workspace, prefix + '_loss' + '.csv', str(test_loss))
 
-        root = 'results/' + args.workspace
+        # logger.info(f"current epoch is: {curr_round * args.cloud_epoch + epoch}")
+        writer.add_scalar('Accuracy/test', acc, curr_round * args.cloud_epoch + epoch)
+        writer.add_scalar('Loss/test', test_loss, curr_round * args.cloud_epoch + epoch)
+        writer.add_scalar('Other/Learning rate', optimizer.param_groups[0]['lr'], curr_round * args.cloud_epoch + epoch)
 
-        writer = SummaryWriter(log_dir=root, comment=args.workspace)
-        writer.add_scalar('Accuracy/test', acc, epoch)
-        writer.add_scalar('Loss/test', test_loss, epoch)
-        
         # Debug confidence
-        # Now the distill function returns [trainloss, confidence_results]
+        # Now the distill function returns [trainloss, confidence_results] 
+   
         if args.save_confidence:
             trainloss = res[0]
             confidence_results = res[1]
-            # write_csv('results/' + args.workspace, 'confidence.csv', str(confidence_results))
             save_json('results/' + args.workspace, 'confidence.json', confidence_results)
 
         else:
             trainloss = res
 
         list_loss.append(trainloss)
-    # save_json('results/' + args.workspace, 'loss.json', list_loss)
-
     logger.debug("===> BEST ACC. DISTILLATION: %.2f%%" % (best_acc))
 
-    return cloud
+    return best_acc, test_loss
